@@ -60,13 +60,24 @@ function field(i: Ix, name: string): string {
   return i.fields.getTextInputValue(name).trim();
 }
 
-/** Reemplaza el panel en el mismo mensaje. */
-async function update(i: Ix, panel: Panel): Promise<void> {
+/**
+ * Reemplaza el panel en el mismo mensaje. Si el handler ya hizo deferUpdate() (porque iba a tardar
+ * más de 3 s hablando con Discord), edita la respuesta diferida en lugar de responder de nuevo.
+ */
+export async function update(i: Ix, panel: Panel): Promise<void> {
   // attachments: [] quita las imágenes del panel anterior; files agrega las del nuevo (si tiene).
   const body = { embeds: panel.embeds, components: panel.components, files: panel.files ?? [], attachments: [], allowedMentions: { parse: [] } };
-  if (i.isMessageComponent()) await i.update(body);
+  if (i.deferred || i.replied) await i.editReply(body);
+  else if (i.isMessageComponent()) await i.update(body);
   else if (i.isFromMessage()) await i.update(body);
   else await i.reply({ embeds: body.embeds, components: body.components, files: body.files, allowedMentions: body.allowedMentions, flags: MessageFlags.Ephemeral });
+}
+
+/** Avisa a Discord que la respuesta va a tardar (la edición llega después con update()). */
+export async function deferPanel(i: Ix): Promise<void> {
+  if (i.deferred || i.replied) return;
+  if (i.isMessageComponent() || i.isFromMessage()) await i.deferUpdate();
+  else await i.deferReply({ flags: MessageFlags.Ephemeral });
 }
 
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T {
@@ -438,6 +449,7 @@ const rolesAdminHandler: Handler = async (app, i, id) => {
         throw new GameError(`No puedo enviar mensajes con embeds en <#${ch.id}>.`);
       }
       const payload = { ...publicGroupMessage(guild, g), allowedMentions: { parse: [] } };
+      await deferPanel(i);
       let messageId: string | null = null;
       if (g.channel_id === ch.id && g.message_id) {
         messageId = await (ch as TextChannel | NewsChannel).messages.edit(g.message_id, payload).then((m) => m.id).catch(() => null);
@@ -525,6 +537,8 @@ const rolesPublicHandler: Handler = async (app, i, id) => {
 
   const toAdd = desired.filter((r) => !member.roles.cache.has(r));
   const toRemove = usable.filter((r) => member.roles.cache.has(r) && !desired.includes(r));
+  // Cambiar roles puede tardar (cola de la API): se avisa antes para no pasar los 3 s de la interacción.
+  if (toAdd.length || toRemove.length) await deferPanel(i);
   let updated = member;
   if (toRemove.length) updated = await updated.roles.remove(toRemove, `Panel de roles: ${g.name}`);
   if (toAdd.length) updated = await updated.roles.add(toAdd, `Panel de roles: ${g.name}`);
@@ -584,6 +598,7 @@ const eventsHandler: Handler = async (app, i, id) => {
       return;
     }
     case 'launch': {
+      await deferPanel(i);
       const e = await launchEvent(app, guild.id, true);
       const msg = !e ? 'No se pudo crear el evento.' : e.state === 'cancelled' ? '⚠️ El evento no se pudo publicar: revisá los permisos del canal.' : e.kind === 'marea' ? '🌅 ¡Salió una Marea dorada para todo el servidor!' : '🎁 Sorteo publicado.';
       await update(i, eventsAdminPanel(ctx, guild, owner, msg));
@@ -663,6 +678,9 @@ const kissHandler: Handler = async (app, i, id) => {
 // ───────────────────────── premium: confirmar limpiezas ─────────────────────────
 
 const premiumHandler: Handler = async (app, i, id) => {
+  // Estos botones solo existen en mensajes (nunca en un modal): Ix incluye ModalSubmit, así que se descarta acá.
+  // Antes se llamaba a i.update() sin esta guarda y TypeScript no compilaba (TS2339), por eso el bot no arrancaba.
+  if (!i.isMessageComponent()) throw new GameError('Acción desconocida.');
   if (id.act === 'cancel') {
     await i.update({ embeds: [new EmbedBuilder().setColor(0x80848e).setDescription('Cancelado. No se borró nada.')], components: [] });
     return;
@@ -672,13 +690,15 @@ const premiumHandler: Handler = async (app, i, id) => {
   const info = clearInfo(kind);
   // Se vuelve a verificar el nivel al confirmar (pudo vencer entre medio).
   requireTier(app.ctx, i.user.id, info.tier, info.cmd);
+  // fetchAndRecord habla con la API de Discord: se avisa primero para no pasar los 3 s de la interacción.
+  await i.deferUpdate();
   const n = kind === 'avatars' ? clearMedia(app.ctx, i.user.id, ['avatar', 'banner'])
     : kind === 'names' ? clearNames(app.ctx, i.user.id, ['username', 'display', 'nick'])
       : clearNames(app.ctx, i.user.id, ['tag']);
   // Lo actual se vuelve a registrar como único punto de partida.
   await fetchAndRecord(app, i.user.id, i.guild.id);
   if (kind === 'names' && i.member.nickname) recordName(app.ctx, i.user.id, 'nick', i.member.nickname, i.guild.id);
-  await i.update({ embeds: [new EmbedBuilder().setColor(0x57f287).setDescription(`🗑️ Listo: borré ${n} registro${n === 1 ? '' : 's'} de tu historial de ${info.label}.`)], components: [] });
+  await i.editReply({ embeds: [new EmbedBuilder().setColor(0x57f287).setDescription(`🗑️ Listo: borré ${n} registro${n === 1 ? '' : 's'} de tu historial de ${info.label}.`)], components: [] });
 };
 
 export const HANDLERS: Record<string, Handler> = {
