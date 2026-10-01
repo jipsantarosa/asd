@@ -152,6 +152,9 @@ export function createActivityServer(deps: ActivityDeps): http.Server {
     if (req.method === 'GET' && route === '/api/config') return send(res, 200, { clientId: deps.clientId });
 
     if (req.method === 'POST' && route === '/api/token') {
+      // Sin sesión todavía: el límite va por IP (evita usar el servidor para martillar la API de OAuth de Discord).
+      const ip = (req.headers['cf-connecting-ip'] as string | undefined) ?? req.socket.remoteAddress ?? '?';
+      if (deps.limiter.check(`oauth:${ip}`, 10, 60_000, 1_000_000) !== 'ok') throw new HttpError(429, 'Demasiados intentos. Esperá un minuto.');
       const code = str(await readJson(req), 'code', 256);
       let accessToken: string;
       let user: DiscordUser;
@@ -273,7 +276,19 @@ export function createActivityServer(deps: ActivityDeps): http.Server {
       res.writeHead(405).end();
       return;
     }
-    const rel = route === '/' ? 'index.html' : decodeURIComponent(route).replace(/^\/+/, '');
+    // decodeURIComponent lanza con secuencias inválidas (p. ej. "/%E0%A4%A"): antes eso tiraba abajo todo el bot.
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(route);
+    } catch {
+      res.writeHead(400).end();
+      return;
+    }
+    if (decoded.includes('\0')) {
+      res.writeHead(400).end();
+      return;
+    }
+    const rel = route === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
     let file = path.resolve(staticRoot, rel);
     if (!file.startsWith(staticRoot + path.sep)) {
       res.writeHead(403).end();
@@ -292,14 +307,29 @@ export function createActivityServer(deps: ActivityDeps): http.Server {
       'X-Content-Type-Options': 'nosniff',
     });
     if (req.method === 'HEAD') res.end();
-    else fs.createReadStream(file).pipe(res);
+    else fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
   }
 
   const server = http.createServer((req, res) => {
-    const url = new URL(req.url ?? '/', 'http://localhost');
+    let url: URL;
+    try {
+      url = new URL(req.url ?? '/', 'http://localhost');
+    } catch {
+      res.writeHead(400).end();
+      return;
+    }
     // Discord puede reenviar las solicitudes con el prefijo "/.proxy".
     const route = url.pathname.replace(/^\/\.proxy(?=\/)/, '');
-    if (!route.startsWith('/api/')) return serveStatic(req, res, route);
+    if (!route.startsWith('/api/')) {
+      // Cualquier error inesperado acá responde 500: nunca debe llegar a tirar el proceso del bot.
+      try {
+        serveStatic(req, res, route);
+      } catch (err) {
+        logger.incident(err, `actividad estático ${route}`);
+        if (!res.headersSent) res.writeHead(500).end();
+      }
+      return;
+    }
     api(req, res, route, url).catch((err: unknown) => {
       if (err instanceof HttpError) return send(res, err.status, { error: err.message });
       if (err instanceof GameError) return send(res, 400, { error: err.message, readyAt: err.readyAt ?? null });
@@ -317,6 +347,7 @@ export function discordOAuth(clientId: string, clientSecret: string) {
     async exchangeCode(code: string): Promise<string> {
       const r = await fetch('https://discord.com/api/v10/oauth2/token', {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: 'authorization_code', code }),
       });
@@ -332,7 +363,7 @@ export function discordOAuth(clientId: string, clientSecret: string) {
       return data.access_token;
     },
     async fetchUser(accessToken: string): Promise<DiscordUser> {
-      const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${accessToken}` } });
+      const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10_000) });
       if (!r.ok) throw new Error(`users/@me respondió ${r.status}`);
       return (await r.json()) as DiscordUser;
     },

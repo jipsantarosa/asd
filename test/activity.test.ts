@@ -75,6 +75,25 @@ describe('actividad de granja (API)', () => {
     assert.notEqual(r.status, 200);
   });
 
+  it('una URL mal codificada responde 400 y no tira el proceso (antes era un crash remoto)', async () => {
+    for (const bad of ['/%E0%A4%A', '/%', '/.proxy/%ZZ', '/%00']) {
+      const r = await fetch(`${base}${bad}`);
+      assert.equal(r.status, 400, bad);
+    }
+    const ok = await fetch(`${base}/`);
+    assert.equal(ok.status, 200, 'el servidor sigue respondiendo');
+  });
+
+  it('limita los intentos de inicio de sesión por IP', async () => {
+    let limited = 0;
+    for (let n = 0; n < 12; n++) {
+      const r = await fetch(`${base}/api/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'malo' }) });
+      if (r.status === 429) limited++;
+    }
+    assert.ok(limited >= 1, 'después de 10 intentos por minuto responde 429');
+    w.clock.advance(61_000);
+  });
+
   it('rechaza un código OAuth inválido y las acciones sin sesión', async () => {
     const bad = await post('/api/token', null, { code: 'malo' });
     assert.equal(bad.status, 401);

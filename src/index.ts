@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { openDatabase } from './db/sqlite';
 import { runMigrations } from './db/migrations';
+import { startBackups } from './db/backup';
 import { loadBaseConfig } from './game/config';
 import { env } from './env';
 import { logger } from './logger';
@@ -143,6 +144,9 @@ async function main(): Promise<void> {
   // Canales de voz temporales: crear al entrar al hub, borrar vacíos y reconciliar tras reinicios.
   const tempVoice = startTempVoice(app);
 
+  // Copia de seguridad diaria de la base (data/backups, se guardan 7).
+  const backups = startBackups(db, env.databasePath);
+
   // Mantenimiento periódico: sesiones de pesca abandonadas, cooldowns viejos, memoria del antispam.
   const sweep = setInterval(() => {
     try {
@@ -166,6 +170,7 @@ async function main(): Promise<void> {
     clearInterval(notices);
     clearInterval(autoplay);
     clearInterval(tempVoice);
+    clearInterval(backups);
     activity?.close();
     await client.destroy().catch(() => undefined);
     db.close();
@@ -174,6 +179,9 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('unhandledRejection', (e) => logger.error('Promesa rechazada sin manejar:', e));
+  // Un error inesperado en un evento no debe tirar el bot entero: se registra y se sigue
+  // (todo el estado importante está en SQLite, con transacciones atómicas).
+  process.on('uncaughtException', (e) => logger.error('Excepción no capturada (el bot sigue funcionando):', e));
 
   await client.login(env.token());
 }

@@ -33,13 +33,15 @@ for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
 )
 
 rem ---------- Dependencias ----------
+rem Siempre se corre npm install: si una actualizacion trae una dependencia nueva, se instala sola.
+rem Cuando no hay nada nuevo tarda solo unos segundos.
 if not exist "node_modules" (
   echo [1/4] Instalando dependencias, puede tardar unos minutos...
-  call npm install
-  if errorlevel 1 goto :fail
 ) else (
-  echo [1/4] Dependencias instaladas.
+  echo [1/4] Revisando dependencias...
 )
+call npm install --no-audit --no-fund --loglevel=error
+if errorlevel 1 goto :fail
 
 echo [2/4] Base de datos: se usa better-sqlite3 si funciona, o el SQLite incluido en Node.
 

@@ -4,3 +4,4 @@ data/*.db*
 .env
 game.config.json
 activity/dist/
+data/backups/

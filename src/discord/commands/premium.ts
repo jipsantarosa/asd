@@ -224,8 +224,12 @@ export const ghostCmd: Command = {
 export const BOT_PROFILE_SLOTS = 3;
 const IMG_TYPES = /^image\/(png|jpeg|gif|webp)$/;
 
+/** Solo imágenes subidas a Discord: el bot no descarga URLs arbitrarias (evita usarlo para pedir cosas a la red interna). */
+const DISCORD_CDN = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//;
+
 async function imageDataUri(url: string): Promise<string> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  if (!DISCORD_CDN.test(url)) throw new GameError('Adjuntá la imagen al mensaje (o pegá un enlace de una imagen subida a Discord).');
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000), redirect: 'error' }).catch(() => null);
   if (!res?.ok) throw new GameError('No pude descargar la imagen.');
   const type = res.headers.get('content-type')?.split(';')[0] ?? '';
   if (!IMG_TYPES.test(type)) throw new GameError('La imagen tiene que ser PNG, JPG, GIF o WEBP.');

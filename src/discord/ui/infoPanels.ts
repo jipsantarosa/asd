@@ -182,7 +182,7 @@ export function achievementsPanel(ctx: GameContext, v: Viewer, filter: AchFilter
 
 // ───────────────────────── Ayuda ─────────────────────────
 
-export type HelpPage = 'inicio' | 'granja' | 'pesca' | 'mercado' | 'progreso' | 'comunidad' | 'comandos';
+export type HelpPage = 'inicio' | 'granja' | 'pesca' | 'mercado' | 'progreso' | 'comunidad' | 'voz' | 'moderacion' | 'comandos';
 const HELP_PAGES: { id: HelpPage; label: string; emoji: string }[] = [
   { id: 'inicio', label: 'Primeros pasos', emoji: '🧭' },
   { id: 'granja', label: 'Granja', emoji: '🌾' },
@@ -190,6 +190,8 @@ const HELP_PAGES: { id: HelpPage; label: string; emoji: string }[] = [
   { id: 'mercado', label: 'Mercado', emoji: '🛒' },
   { id: 'progreso', label: 'Progresión', emoji: '📈' },
   { id: 'comunidad', label: 'Comunidad', emoji: '💬' },
+  { id: 'voz', label: 'Canales de voz', emoji: '🔊' },
+  { id: 'moderacion', label: 'Moderación', emoji: '🛡️' },
   { id: 'comandos', label: 'Comandos', emoji: '⌨️' },
 ];
 
@@ -228,7 +230,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       '• La venta en lote nunca vende Épicos o mejores, carnada ni materiales para cañas.',
     ].join('\n'),
     comunidad: [
-      `• \`${prefix}kiss @usuario\` — un beso con GIF de anime. Lleva la cuenta de besos entre ustedes dos (da igual quién lo mande) y de los que diste.`,
+      `• \`${prefix}kiss @usuario\` — un beso con GIF de anime y la cuenta de besos entre ustedes dos. Quien lo recibe puede tocar **💋 Corresponder** (el bot responde con otro GIF y el contador actualizado) o **💔 Rechazar**. \`${prefix}besos\` muestra tus estadísticas.`,
       `• \`${prefix}avs @usuario\` — avatar actual e historial de avatares que el bot vio desde que registra (no inventa cambios anteriores).`,
       `• \`${prefix}banners @usuario\` — lo mismo con el banner de perfil.`,
       `• \`${prefix}m @usuario 100\` — *moderación:* borra hasta 1000 mensajes recientes de esa persona en el canal. Requiere **Gestionar mensajes**; Discord no deja borrar en bloque mensajes de más de 14 días.`,
@@ -244,6 +246,27 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       '• 🔥 **Actividad**: pescar, farmear, vender, comprar y ganar sorteos suman puntos (con tope diario, así que el spam no sirve).',
       '• 🏅 **Logros**: 29 logros con insignia propia y premio único. Te avisamos por mensaje privado; si tenés los MD cerrados, igual quedan en `/perfil` → Logros.',
     ].join('\n'),
+    voz: [
+      '🔊 **Canales de voz temporales:** entrá al canal **➕ Crear canal** y el bot te arma tu propio canal de voz y te mueve ahí. Cuando queda vacío, se borra solo.',
+      '',
+      '• Manejalo desde el canal de **interfaz**, desde el chat de tu canal o con `/canal`:',
+      '  ✏️ nombre · 👥 límite · 🔒 privado · 👻 oculto · 🌍 región · ✅ permitir · ➖ quitar acceso · 📨 invitar · 👢 expulsar · 🚫 bloquear · ♻️ desbloquear · 👑 reclamar · 🔁 transferir · 🗑️ eliminar · ℹ️ info.',
+      '• Tus ajustes (nombre, límite, privacidad, permitidos y bloqueados) se guardan para la próxima vez.',
+      '• Si quien creó el canal se va, cualquiera que esté adentro puede usar **👑 Reclamar**.',
+      '• Discord solo deja renombrar un canal 2 veces cada 10 minutos: el bot te avisa cuándo podés de nuevo.',
+      '',
+      '**Admins:** `/voz` crea o repara la categoría, el canal para crear y la interfaz (sin duplicar), y cambia el nombre y el límite por defecto.',
+    ].join('\n'),
+    moderacion: [
+      '🛡️ **Sanciones** (`/mod …` o por prefijo): ' + `\`${prefix}warn\`, \`${prefix}timeout @x 10m\`, \`${prefix}untimeout\`, \`${prefix}kick\`, \`${prefix}ban\`, \`${prefix}unban ID\`.`,
+      '• Cada sanción crea un **caso numerado** (#1, #2…) con motivo, moderador y fecha. Queda en el registro de moderación y le llega un MD a la persona.',
+      `• \`${prefix}historial @x\` muestra sus casos; \`${prefix}caso 12\` abre uno para **editar el motivo** o **anularlo**.`,
+      '• **Escalado:** al juntar advertencias activas, el bot puede aislar, expulsar o banear solo (se configura; las advertencias vencen).',
+      '• **Automod:** antispam (ráfagas → aislamiento), antiflood (repetidos, menciones, paredes de texto), filtro de enlaces e invitaciones, y **antiraid** (muchas entradas juntas → modo raid).',
+      '• **Permisos:** alcanza con los de Discord (Moderar miembros, Expulsar, Banear) o con un rol de moderador/administrador configurado en `/automod` → Roles.',
+      '• Jerarquía: nadie puede sancionar a alguien con un rol igual o más alto, ni al dueño ni al bot.',
+      `• \`${prefix}m @x 100\` borra mensajes recientes de esa persona en el canal.`,
+    ].join('\n'),
     comandos: [
       `Prefijo de este servidor: \`${prefix}\` (también podés mencionarme).`,
       '',
@@ -256,7 +279,11 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       '`/jugar` — abre El Valle como juego (granja, pesca y top)',
       `\`/prefijo\` · \`${prefix}prefijo [nuevo]\` — ver o cambiar el prefijo`,
       '',
-      '**Administración:** `/setup` (registros), `/roles` (paneles de roles y distinciones), `/ajustes` (valores del juego).',
+      `\`/kiss\` · \`${prefix}kiss @usuario\` — un beso · \`/besos\` — tus estadísticas`,
+      '`/canal` — manejar tu canal de voz temporal',
+      '',
+      '**Moderación:** `/mod warn|timeout|untimeout|kick|ban|unban|historial|caso` (o por prefijo).',
+      '**Administración:** `/setup` (registros), `/roles` (paneles de roles y distinciones), `/ajustes` (valores del juego), `/voz` (canales temporales), `/automod` (automod, antiraid y roles de moderación).',
     ].join('\n'),
   };
   const meta = HELP_PAGES.find((h) => h.id === page)!;

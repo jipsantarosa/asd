@@ -1,6 +1,6 @@
 import {
   AttachmentBuilder, AuditLogEvent, ChannelType, EmbedBuilder, Events, PermissionFlagsBits,
-  type Client, type Guild, type GuildAuditLogsEntry, type Message, type PartialMessage,
+  type Client, type Guild, type GuildAuditLogsEntry, type GuildMember, type Message, type PartialGuildMember, type PartialMessage, type VoiceState,
 } from 'discord.js';
 import { logger } from '../../logger';
 import type { GameContext } from '../../services/context';
@@ -10,6 +10,8 @@ import { COLORS, clean, truncate } from '../ui/theme';
 import { logSystem, sendLog } from './sender';
 
 const MAX_REUPLOAD_BYTES = 8 * 1024 * 1024;
+/** Suma máxima de adjuntos respaldados por mensaje (el límite de subida de un bot es de 10 MB). */
+const MAX_REUPLOAD_TOTAL = 9 * 1024 * 1024;
 const ts = (d: Date | number | null | undefined) => (d ? `<t:${Math.floor(new Date(d).getTime() / 1000)}:R>` : 'desconocido');
 const who = (id: string | null | undefined) => (id ? `<@${id}> (\`${id}\`)` : 'desconocido');
 
@@ -51,12 +53,18 @@ export function registerLogEvents(client: Client, ctx: GameContext): void {
         });
       }
       if (msg.attachments.size) {
-        const small = msg.attachments.filter((a) => a.size <= MAX_REUPLOAD_BYTES).first(10);
-        const big = msg.attachments.filter((a) => a.size > MAX_REUPLOAD_BYTES);
+        // Tope por archivo y por mensaje: Discord rechaza envíos grandes y descargar 80 MB por mensaje no escala.
+        let budget = MAX_REUPLOAD_TOTAL;
+        const small = msg.attachments.filter((a) => {
+          if (a.size > MAX_REUPLOAD_BYTES || a.size > budget) return false;
+          budget -= a.size;
+          return true;
+        }).first(10);
+        const big = msg.attachments.filter((a) => !small.includes(a));
         await sendLog(ctx, msg.guild, 'adjuntos', {
           embeds: [base(COLORS.log, `🖼️ ${msg.attachments.size} adjunto(s)`)
             .setAuthor({ name: msg.author.tag, iconURL: msg.author.displayAvatarURL() })
-            .setDescription(`${who(msg.author.id)} en <#${msg.channelId}> · [ir al mensaje](${msg.url})${big.size ? `\nDemasiado grandes para respaldar: ${big.map((a) => clean(a.name)).join(', ')}` : ''}`)],
+            .setDescription(`${who(msg.author.id)} en <#${msg.channelId}> · [ir al mensaje](${msg.url})${big.size ? `\nSin respaldo (demasiado grandes): ${big.map((a) => `[${clean(a.name)}](${a.url})`).join(', ')}` : ''}`)],
           files: small.map((a) => new AttachmentBuilder(a.url, { name: a.name })),
         });
       }
@@ -122,34 +130,9 @@ export function registerLogEvents(client: Client, ctx: GameContext): void {
   });
 
   // ───────────── Entradas y salidas ─────────────
-  client.on(Events.GuildMemberAdd, async (member) => {
-    const ageDays = (Date.now() - member.user.createdTimestamp) / 86_400_000;
-    await sendLog(ctx, member.guild, 'entradas', {
-      embeds: [base(COLORS.ok, '📥 Entró un miembro')
-        .setAuthor({ name: member.user.tag, iconURL: member.displayAvatarURL() })
-        .setDescription(`${who(member.id)}\nCuenta creada ${ts(member.user.createdAt)}${ageDays < 7 ? ' ⚠️ **cuenta nueva**' : ''}\nMiembros: **${member.guild.memberCount}**`)],
-    });
-  });
-
-  client.on(Events.GuildMemberRemove, async (member) => {
-    const roles = member.roles?.cache.filter((r) => r.id !== member.guild.id).map((r) => `<@&${r.id}>`) ?? [];
-    await sendLog(ctx, member.guild, 'entradas', {
-      embeds: [base(COLORS.warn, '📤 Salió un miembro')
-        .setAuthor({ name: member.user?.tag ?? member.id, iconURL: member.user?.displayAvatarURL() })
-        .setDescription(`${who(member.id)}\nSe había unido ${ts(member.joinedAt)}\nRoles: ${truncate(roles.join(' ') || 'ninguno', 900)}\n*Si fue expulsión o baneo, figura en su canal correspondiente.*`)],
-    });
-  });
-
-  // ───────────── Voz ─────────────
-  client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-    if (oldState.channelId === newState.channelId) return;
-    const member = newState.member ?? oldState.member;
-    if (!member || member.user.bot) return;
-    const text = !oldState.channelId ? `🔊 ${who(member.id)} entró a <#${newState.channelId}>`
-      : !newState.channelId ? `🔇 ${who(member.id)} salió de <#${oldState.channelId}>`
-        : `🔀 ${who(member.id)} pasó de <#${oldState.channelId}> a <#${newState.channelId}>`;
-    await sendLog(ctx, newState.guild, 'voz', { embeds: [new EmbedBuilder().setColor(COLORS.log).setDescription(text).setTimestamp()] });
-  });
+  client.on(Events.GuildMemberAdd, (member) => void logMemberAdd(ctx, member).catch((err) => logger.warn('log memberAdd:', err)));
+  client.on(Events.GuildMemberRemove, (member) => void logMemberRemove(ctx, member).catch((err) => logger.warn('log memberRemove:', err)));
+  client.on(Events.VoiceStateUpdate, (o, n) => void logVoice(ctx, o, n).catch((err) => logger.warn('log voz:', err)));
 
   // ───────────── Auditoría: baneos, expulsiones, sanciones, roles, apodos, servidor ─────────────
   client.on(Events.GuildAuditLogEntryCreate, async (entry, guild) => {
@@ -162,12 +145,54 @@ export function registerLogEvents(client: Client, ctx: GameContext): void {
 
   // ───────────── Mantenimiento: canales y roles borrados ─────────────
   client.on(Events.ChannelDelete, async (channel) => {
-    if (channel.type === ChannelType.DM || !('guild' in channel)) return;
-    const key = forgetLogChannel(ctx, channel.guild.id, channel.id);
-    if (key) await logSystem(ctx, channel.guild, `⚠️ Se eliminó el canal de registros **${key}**. Ejecutá \`/setup\` para recrearlo.`, COLORS.warn);
+    try {
+      if (channel.type === ChannelType.DM || !('guild' in channel)) return;
+      const key = forgetLogChannel(ctx, channel.guild.id, channel.id);
+      if (key) await logSystem(ctx, channel.guild, `⚠️ Se eliminó el canal de registros **${key}**. Ejecutá \`/setup\` para recrearlo.`, COLORS.warn);
+    } catch (err) {
+      logger.warn('log channelDelete:', err);
+    }
   });
 
-  client.on(Events.GuildRoleDelete, (role) => forgetRole(ctx, role.guild.id, role.id));
+  client.on(Events.GuildRoleDelete, (role) => {
+    try {
+      forgetRole(ctx, role.guild.id, role.id);
+    } catch (err) {
+      logger.warn('log roleDelete:', err);
+    }
+  });
+}
+
+// ───────────── Entradas y salidas ─────────────
+
+async function logMemberAdd(ctx: GameContext, member: GuildMember): Promise<void> {
+  const ageDays = (Date.now() - member.user.createdTimestamp) / 86_400_000;
+  await sendLog(ctx, member.guild, 'entradas', {
+    embeds: [base(COLORS.ok, '📥 Entró un miembro')
+      .setAuthor({ name: member.user.tag, iconURL: member.displayAvatarURL() })
+      .setDescription(`${who(member.id)}\nCuenta creada ${ts(member.user.createdAt)}${ageDays < 7 ? ' ⚠️ **cuenta nueva**' : ''}\nMiembros: **${member.guild.memberCount}**`)],
+  });
+}
+
+async function logMemberRemove(ctx: GameContext, member: GuildMember | PartialGuildMember): Promise<void> {
+  const roles = member.roles?.cache.filter((r) => r.id !== member.guild.id).map((r) => `<@&${r.id}>`) ?? [];
+  await sendLog(ctx, member.guild, 'entradas', {
+    embeds: [base(COLORS.warn, '📤 Salió un miembro')
+      .setAuthor({ name: member.user?.tag ?? member.id, iconURL: member.user?.displayAvatarURL() })
+      .setDescription(`${who(member.id)}\nSe había unido ${ts(member.joinedAt)}\nRoles: ${truncate(roles.join(' ') || 'ninguno', 900)}\n*Si fue expulsión o baneo, figura en su canal correspondiente.*`)],
+  });
+}
+
+// ───────────── Voz ─────────────
+
+async function logVoice(ctx: GameContext, oldState: VoiceState, newState: VoiceState): Promise<void> {
+  if (oldState.channelId === newState.channelId) return;
+  const member = newState.member ?? oldState.member;
+  if (!member || member.user.bot) return;
+  const text = !oldState.channelId ? `🔊 ${who(member.id)} entró a <#${newState.channelId}>`
+    : !newState.channelId ? `🔇 ${who(member.id)} salió de <#${oldState.channelId}>`
+      : `🔀 ${who(member.id)} pasó de <#${oldState.channelId}> a <#${newState.channelId}>`;
+  await sendLog(ctx, newState.guild, 'voz', { embeds: [new EmbedBuilder().setColor(COLORS.log).setDescription(text).setTimestamp()] });
 }
 
 type Change = { key: string; old?: unknown; new?: unknown };
