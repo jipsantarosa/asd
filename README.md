@@ -1,6 +1,9 @@
 # 🌾 El Valle — bot de Discord
 
 Granja, pesca de un botón con rarezas, 12 cañas y carnada, logros con insignias y aviso por DM, puntos de actividad, potenciadores temporales, sorteos automáticos, mercado con demanda dinámica, roles interactivos y registros del servidor.
+Además: **besos** con respuesta y contador por pareja, **canales de voz temporales** con interfaz de botones y **moderación completa** (casos, advertencias con escalado, aislamientos, expulsiones, baneos, automod y antiraid).
+
+> 📋 La auditoría completa (problemas encontrados, arquitectura, decisiones y pruebas) está en [`docs/AUDITORIA.md`](docs/AUDITORIA.md).
 Todo se maneja con paneles (botones, menús y ventanas) dentro de un mismo mensaje, como una app.
 
 Stack: Node.js 22+, TypeScript, discord.js 14, SQLite (better-sqlite3).
@@ -18,7 +21,9 @@ Stack: Node.js 22+, TypeScript, discord.js 14, SQLite (better-sqlite3).
 5. Invitá al bot con **OAuth2 → URL Generator**:
    - Scopes: `bot` y `applications.commands`.
    - Permisos: Ver canales, Enviar mensajes, Insertar enlaces, Adjuntar archivos, Leer el historial de mensajes, Gestionar canales, Gestionar roles y Ver el registro de auditoría.
-   - Ubicá el **rol del bot por encima** de los roles que va a entregar (paneles de roles y distinciones).
+   - Para **canales de voz temporales**: además Conectar y Mover miembros.
+   - Para **moderación y automod**: además Gestionar mensajes, Moderar miembros, Expulsar miembros y Banear miembros.
+   - Ubicá el **rol del bot por encima** de los roles que va a entregar (paneles de roles y distinciones) y de los roles de quienes va a moderar.
 
 ## 2. Instalación
 
@@ -50,7 +55,8 @@ Variables de `.env`:
 
 - **Motor de SQLite:** el bot usa `better-sqlite3` si funciona en tu PC. Si no (por ejemplo, con Node 24 en Windows sin binario compilado), usa automáticamente el SQLite que ya trae Node (22.13 o superior). No hace falta compilar nada, y el archivo de datos es el mismo con cualquiera de los dos.
 - Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada. Cada una se registra en la tabla `schema_migrations`.
-- **Copia de seguridad:** detené el bot y copiá los archivos `valle.db`, `valle.db-wal` y `valle.db-shm`.
+- **Copia de seguridad automática:** una vez por día el bot guarda una copia consistente en `data/backups/valle-AAAA-MM-DD.db` (se conservan las últimas 7). Para restaurar: detené el bot, copiá la que quieras como `data/valle.db` y borrá `valle.db-wal` y `valle.db-shm`.
+- **Copia manual:** detené el bot y copiá los archivos `valle.db`, `valle.db-wal` y `valle.db-shm`.
 - **Migración 2 (nueva pesca):** convierte la caña que tenía cada jugador en las cañas nuevas equivalentes (tier 1 → Sauce, 2 → Tejedora, 3 → Coral, 4 → Brújula, 5 → Abismo, con todas las anteriores incluidas). Los **carretes** y los **permisos de lugares de pesca** ya no existen, así que se **reintegra en monedas** lo pagado (queda registrado en el libro contable) y se devuelve el Mapa de corrientes a quien había abierto la Fosa. Inventario, peces, colección, niveles, XP, granja y monedas se conservan tal cual.
 - **Migración 3 (logros, actividad y tienda):** agrega los puntos de actividad, las estadísticas de logros y la habilidad `actividad` en las distinciones (las ya configuradas se conservan). Reconstruye las estadísticas de los jugadores existentes a partir del registro de pesca, el libro contable y los sorteos ganados, para que los veteranos reciban los logros que ya tenían en su próxima acción (los avisos por DM salen de a 5). A quien ya tenía una caña superior le regala las cañas nuevas intermedias (Corcho, Boya roja, Marea azul, Sigilo).
 - **Migración 6 (respuestas a besos):** crea `kiss_replies`: cada beso se puede corresponder o rechazar una sola vez.
@@ -145,12 +151,17 @@ Solo el **dueño del bot** puede darlo: el dueño de la aplicación en el portal
 - Las limpiezas piden confirmación con botones. Lo actual se vuelve a registrar como único punto de partida.
 - `!mstats`: mirarte a vos mismo no cuenta, y la misma persona mirando lo mismo cuenta una vez cada 10 minutos.
 - **`!names @usuario`** (gratis): historial de @usuario, nombre visible y apodos en el servidor. Los tags de servidor se registran solos (necesitan discord.js 14.21 o superior, que es lo que instala `npm install`).
+- **Migración 9 (besos v2, voz temporal y moderación):** crea `kisses` (cada beso con su estado), `voice_config`, `temp_voice_channels`, `voice_profiles`, `voice_access`, `mod_cases`, `mod_roles` y `automod_config`. No toca datos existentes; los botones de besos viejos siguen funcionando.
 - **Migración 8:** tabla `autoplay` y cantidad de servidores de `!botperfil` por persona.
 - **Migración 7:** tablas `premium`, `user_names`, `history_views` y `bot_profile_slots`. No toca datos existentes.
 
 ### Comunidad y moderación
 
-- **`!kiss @usuario`:** "**A** se besa con **B**.", con un GIF de anime (apto para todo público, desde nekos.best o, si falla, waifu.pics) y el nombre del anime abajo. Botones **💘 Corresponder** (devuelve el beso y suma al contador) y **❌ Rechazar**: solo los puede usar quien recibió el beso, y una sola vez (queda guardado en la base). Lleva el contador **💋 Besos entre @A y @B** por servidor. La pareja se guarda en orden canónico, así que da igual quién lo mande, y el contador sube con un UPSERT atómico dentro de una transacción: sobrevive reinicios y no se duplica ni se pierde con comandos simultáneos. También muestra cuántos besos dio el autor y cuántos recibió el otro. Espera de 5 s por persona; no se puede besar a uno mismo ni a bots. Si la API de GIFs no responde, el beso cuenta igual.
+- **`!kiss @usuario`:** "**salo** besa a **h**." y abajo, en chico, "salo y h se han besado 9 veces."; después el GIF de anime (apto para todo público, de nekos.best o, si falla, waifu.pics), el nombre del anime y los botones **💋 Corresponder** y **💔 Rechazar** (solo los usa quien recibió el beso).
+  - **Corresponder** crea un **mensaje nuevo que responde al original**: "¡h besa a salo de vuelta!", el contador actualizado y **otro GIF**. Los botones del original quedan desactivados.
+  - Cada beso tiene su fila en la base y pasa de "abierto" a "correspondido" o "rechazado" con un UPDATE condicional en la misma transacción que el contador: un doble clic, un panel viejo o un reinicio nunca suman dos veces.
+  - Espera de 5 s por persona y de 15 s por pareja (no se puede inflar el contador). Corresponder no tiene espera. No se puede besar a uno mismo ni a bots. Si la API de GIFs no responde, el beso cuenta igual.
+  - `/besos [usuario]`: besos dados, recibidos, pendientes de respuesta y con quién más.
 - **`!avs @usuario` / `!banners @usuario`:** muestran un **collage** con todo el historial detectado (el más reciente arriba a la izquierda), un menú para ver cada imagen en grande con su fecha, y **📊 Mis estadísticas** (privado, para quien lo toca). El collage se arma en el bot con un codificador PNG propio, sin librerías nativas. El historial es **solo lo que el bot detectó** desde que existe esta función: cambios de avatar al escribir mensajes, al entrar al servidor o cuando Discord avisa (intent *Server Members*), y banners cuando alguien usa el comando (Discord solo manda el banner si se pide explícitamente). Se guarda el ID del usuario, el hash de la imagen, su URL y las fechas. Las imágenes viejas pueden dejar de estar disponibles en la CDN de Discord con el tiempo.
 - **`!m @usuario 1000`:** borra en el canal actual hasta 1000 mensajes recientes de esa persona (también `/purgar`). Requiere **Gestionar mensajes** en ese canal; no permite limpiar a alguien con un rol igual o superior al tuyo (salvo el dueño). Revisa el historial de a 100 mensajes (hasta 10.000) y borra en bloques de hasta 100. Discord **no permite borrar en bloque mensajes de más de 14 días**: el comando se detiene ahí y lo informa. Nunca borra mensajes fijados. Una sola limpieza a la vez por canal. Queda registrado en el canal de logs.
 - **Permisos del bot:** para `!m`, el rol del bot necesita **Gestionar mensajes** y **Leer el historial de mensajes** en el canal.
@@ -165,7 +176,13 @@ Solo el **dueño del bot** puede darlo: el dueño de la aplicación en el portal
 | `/inventario` | `!inv` | todos | Mochila con filtros |
 | `/perfil [usuario]` | `!perfil [@usuario]` | todos | Niveles, equipo, colección, distinciones |
 | `/eventos` | `!eventos` | Gestionar servidor | Sorteos automáticos: canal, activar/desactivar, lanzar uno ahora |
-| `/kiss usuario` | `!kiss` `!beso` | todos | Beso con GIF de anime y botones **Corresponder** / **Rechazar**; cuenta los besos de la pareja y los que diste |
+| `/kiss usuario` | `!kiss` `!beso` | todos | Beso con GIF de anime y botones **Corresponder** / **Rechazar**; cuenta los besos de la pareja |
+| `/besos [usuario]` | `!besos` | todos | Besos dados y recibidos, y con quién más |
+| `/canal` | `!canal` `!vc` | todos | Interfaz para manejar tu canal de voz temporal |
+| `/voz` | `!voz` | Gestionar servidor | Configura o repara los canales de voz temporales |
+| `/mod warn·timeout·untimeout·kick·ban·unban` | `!warn` `!timeout` `!untimeout` `!kick` `!ban` `!unban` | moderación (ver §9) | Sanciones con caso numerado, MD y registro |
+| `/mod historial usuario` · `/mod caso numero` | `!historial` `!caso` | moderación | Historial de una persona; ver, editar o anular un caso |
+| `/automod` | `!automod` | Gestionar servidor | Antispam, antiflood, enlaces, antiraid, advertencias y roles de moderación |
 | `/avatares [usuario]` | `!avs` `!avatars` | todos | Collage con el historial de avatares detectados, menú para ver cada uno y **Mis estadísticas** |
 | `/banners [usuario]` | `!banners` `!bns` | todos | Banner actual e historial de banners detectados por el bot |
 | `/purgar usuario cantidad` | `!m @usuario 1000` · `!c` | Gestionar mensajes | Borra hasta 1000 mensajes recientes de esa persona en el canal (con aviso "Buscando mensajes…") |
@@ -219,7 +236,46 @@ Qué hace al ejecutarse:
 - **Distinciones:** roles automáticos por nivel de granja, de pesca o total. Se entregan al subir de nivel y al abrir `/perfil`. Nunca se quitan solas.
 - **Seguridad:** se rechazan @everyone, los roles gestionados por integraciones, los roles por encima del bot y los que tienen permisos de moderación o administración.
 
-## 8. El Valle como juego (Actividad dentro de Discord)
+## 8. Canales de voz temporales (`/voz`)
+
+1. `/voz` → **Configurar / reparar**. Crea (o recupera, sin duplicar) la categoría **🔊 Canales temporales**, el canal de voz **➕ Crear canal** y el canal de texto **🎛️・interfaz** con el panel de botones.
+2. Al entrar a **➕ Crear canal**, el bot crea tu canal (con tus ajustes guardados) y te mueve ahí. En el chat de ese canal publica el mismo panel.
+3. Cuando el canal queda sin personas, se borra solo. Si el bot estuvo apagado, al volver borra los que quedaron vacíos.
+
+**Interfaz** (canal de interfaz, chat de tu canal o `/canal`):
+
+| ✏️ Nombre | 👥 Límite | 🔒 Privado | 👻 Ocultar | 🌍 Región |
+|---|---|---|---|---|
+| **✅ Permitir** | **➖ Quitar acceso** | **📨 Invitar** (con MD) | **👢 Expulsar** | **ℹ️ Info** |
+| **🚫 Bloquear** | **♻️ Desbloquear** | **👑 Reclamar** | **🔁 Transferir** | **🗑️ Eliminar** |
+
+- Nombre y límite se cambian con una ventana; privado y oculto alternan; región, permitir, invitar, expulsar, bloquear y transferir usan menús.
+- Tus preferencias (nombre, límite, privado, oculto, región, permitidos y bloqueados) se guardan para tus próximos canales.
+- **Reclamar:** si quien creó el canal se va, cualquiera que esté adentro puede tomarlo.
+- **Staff:** quien tiene Administrador, Gestionar canales, Moderar miembros o Mover miembros puede manejar cualquier canal temporal y no puede ser expulsado ni bloqueado desde la interfaz.
+- **Límites:** un canal por persona, 50 por servidor y 10 s entre creaciones. Discord solo deja renombrar un canal 2 veces cada 10 minutos: el bot avisa cuándo se puede de nuevo.
+- **Nombre y límite por defecto:** `/voz` → **Nombre y límite** (`{usuario}` = nombre de quien lo crea).
+
+## 9. Moderación (`/mod`, `/automod`)
+
+- **Sanciones:** `/mod warn`, `/mod timeout usuario 10m`, `/mod untimeout`, `/mod kick`, `/mod ban` (también por ID, con opción de borrar mensajes recientes) y `/mod unban ID`. Por prefijo: `!warn @x motivo`, `!timeout @x 1h30m motivo`, `!kick`, `!ban`, `!unban`.
+- **Casos:** cada sanción crea un caso numerado (#1, #2…) con motivo, moderador, duración y fecha. Se publica en el registro de **moderacion** y le llega un MD a la persona: en expulsiones y baneos, antes de aplicarlos.
+- **Historial:** `/mod historial usuario` muestra advertencias activas, aislamientos, expulsiones y baneos, paginado. `/mod caso 12` abre un caso para **editar el motivo** o **anularlo**: un aislamiento vigente se levanta, y una advertencia anulada deja de contar.
+- **Jerarquía:** nadie puede sancionar a alguien con un rol igual o más alto, ni al dueño ni al bot. Dos moderadores no pueden sancionar a la misma persona a la vez.
+- **Permisos por roles** (`/automod` → Roles y exenciones):
+  - **Moderador:** advertir, aislar e historial.
+  - **Administrador:** además expulsar, banear y editar casos.
+  - Quien tenga los permisos equivalentes de Discord también puede.
+- **Escalado:** las advertencias vencen a los 30 días. Por defecto, 3 activas aíslan 60 minutos; también se puede expulsar o banear al llegar a N.
+- **Automod** (no se aplica al staff, a los roles de moderación ni a roles o canales exentos):
+  - **Antispam:** más de 6 mensajes en 5 s → borra la ráfaga y aísla 5 min.
+  - **Antiflood:** mensajes repetidos, demasiadas menciones o paredes de texto → borra y avisa.
+  - **Enlaces:** apagado, solo invitaciones a otros servidores (por defecto) o todos menos una lista blanca. También revisa mensajes editados.
+  - **Infracciones:** 3 en 10 minutos se convierten en una advertencia.
+- **Antiraid:** 10 entradas en 30 s activan el **modo raid** por 15 min. Según lo que elijas, avisa, aísla o expulsa las cuentas de menos de 7 días, con un resumen en el registro. Se activa o termina a mano desde `/automod`.
+- Todos los valores se cambian en `/automod` con rangos seguros, y los cambios quedan en #sistema.
+
+## 10. El Valle como juego (Actividad dentro de Discord)
 
 Además de los paneles con botones, El Valle se puede jugar como una **Actividad**: un juego visual que se abre dentro de Discord y tiene tres secciones.
 
@@ -286,13 +342,13 @@ pm2 logs tunel     # para ver la dirección del túnel
 - Hay límite de tamaño y de formato en cada solicitud, antispam compartido con el bot y protección contra leer archivos fuera de la carpeta pública.
 - Si `CLIENT_SECRET` está vacío, la Actividad no se inicia y el bot funciona igual que siempre.
 
-## 9. Tests
+## 11. Tests
 
 ```bash
 npm test
 ```
 
-Son 133 tests sobre la lógica sin Discord (juego, pesca, tienda, venta, logros, actividad, eventos, migraciones y API de la Actividad). Cubren:
+Son 207 tests sobre la lógica sin Discord (juego, pesca, tienda, venta, logros, actividad, eventos, besos, canales de voz temporales, moderación, automod, migraciones, copias y API de la Actividad). Cubren:
 
 - migraciones repetidas;
 - persistencia del prefijo y los ajustes tras reiniciar;
@@ -307,7 +363,11 @@ Son 133 tests sobre la lógica sin Discord (juego, pesca, tienda, venta, logros,
 - venta: mitad y todo, doble "vender todo", panel desactualizado, más de 9.999 unidades, protecciones de la venta en lote y persistencia en el libro contable;
 - logros pagados una sola vez; avisos por DM sin duplicados, MD cerrados, reintentos y recuperación tras un reinicio; insignias e imágenes presentes;
 - actividad con topes diarios contra el spam, distinciones por puntos y ranking de actividad;
-- besos: el primero muestra 1, el contador es el mismo sin importar quién besa, sobrevive a un reinicio, no pierde ni duplica con 50 besos seguidos y respeta la espera;
+- besos: el primero muestra 1, el contador es el mismo sin importar quién besa, sobrevive a un reinicio, no pierde ni duplica con 50 besos seguidos y respeta las esperas; corresponder pasa de 9 a 10, un doble clic no suma dos veces, solo responde el destinatario y un id de otro servidor no existe;
+- canales temporales: un dueño, un canal (también con creaciones simultáneas), tope por servidor, transferir y reclamar sin carreras, preferencias, permitidos y bloqueados excluyentes, nombres sin enlaces ni menciones, 2 renombres cada 10 minutos y los permisos del canal nuevo con un servidor simulado;
+- moderación: casos numerados sin repetidos, advertencias que vencen y se anulan, duraciones (`1h30m`, `2 horas`, máximo 28 días), roles por nivel, configuración que no rompe con un JSON inválido y escalado exacto;
+- automod: invitaciones y enlaces (lista blanca, subdominios, dominios parecidos, correos y versiones que no son enlaces), ráfagas, repetidos, memoria acotada y detección de raids;
+- seguridad: una URL mal codificada en la Actividad responde 400 sin tirar el bot, y los inicios de sesión tienen límite; copias de seguridad diarias con retención;
 - historial de avatares y banners sin duplicados, sin historial inventado y con URLs correctas (GIF si es animado);
 - `!m` contra un canal simulado con las reglas de la API: solo el usuario indicado, tope de 1000, bloques de 100, corte a los 14 días, fijados y el propio comando intactos;
 - saturación del mercado y límites diarios;
@@ -315,9 +375,16 @@ Son 133 tests sobre la lógica sin Discord (juego, pesca, tienda, venta, logros,
 - el planificador de `/setup` (servidor limpio, repetido, canal borrado, movido o renombrado, base de datos perdida);
 - el antispam y la matemática de balance (probabilidades, rendimiento pesca/granja, precios crecientes de las cañas).
 
-## 10. Checklist de verificación en un servidor de prueba
+## 12. Checklist de verificación en un servidor de prueba
 
-- [ ] `npm run deploy` y los 17 comandos aparecen (incluye `/eventos`, `/kiss`, `/avatares`, `/banners` y `/purgar`).
+- [ ] `npm run deploy` y los 32 comandos de barra aparecen (incluye `/kiss`, `/besos`, `/canal`, `/voz`, `/mod` y `/automod`).
+- [ ] `!kiss @alguien`: "A besa a B." con "-# A y B se han besado N veces.", GIF, anime y botones. Con la otra cuenta, **Corresponder** → aparece un mensaje nuevo respondiendo al original con "¡B besa a A de vuelta!", N+1 y otro GIF; los botones del original quedan grises. Tocar de nuevo dice que ya fue correspondido.
+- [ ] `/voz` → **Configurar / reparar** dos veces: la segunda no duplica nada. Entrar a ➕ Crear canal crea tu canal y te mueve; salir lo borra.
+- [ ] En tu canal temporal: renombrar (3 veces seguidas: la tercera avisa el límite de Discord), límite, privado (otra cuenta no puede entrar), permitir a esa cuenta (ahora sí), bloquear, transferir, y reclamar desde otra cuenta cuando el dueño se va.
+- [ ] Apagar el bot con un canal temporal vacío y volver a prenderlo: el canal se borra solo.
+- [ ] `/mod warn @alguien spam` ×3 con los valores por defecto: a la tercera queda aislado 60 min (casos #1–#4). `/mod historial` los muestra; `/mod caso 4` → **Anular** le quita el aislamiento.
+- [ ] Con una cuenta sin permisos: `/mod ban` responde que no tiene permiso. Con un rol de moderador configurado en `/automod`, puede `warn` pero no `ban`.
+- [ ] Mandar 7 mensajes en 5 s con una cuenta común: se borran y queda aislada 5 min. Mandar `discord.gg/algo`: se borra con un aviso.
 - [ ] `/pesca`: aparece el lago con 12 casillas; tocar varias casillas seguidas pesca cada vez, sin esperas ni avisos de "procesando", y el lago cambia después de cada tiro.
 - [ ] `/granja` → **Farmear**: suben la XP y la cosecha, baja el vigor. Un doble clic rápido no cosecha dos veces.
 - [ ] Otra persona toca tu panel y recibe "Este panel es de otra persona".

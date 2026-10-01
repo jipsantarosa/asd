@@ -188,7 +188,7 @@ const jugar: Command = {
   data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('jugar').setDescription('Abre El Valle como juego (Actividad): granja, pesca y top.'),
   async run(c) {
     const howTo = '🎮 **El Valle como juego:** entrá a un canal de voz → tocá el ícono del cohete (**Actividades**) → elegí la app.\n' +
-      'Si no aparece, un admin tiene que habilitar las Actividades de la aplicación (README, sección 8).';
+      'Si no aparece, un admin tiene que habilitar las Actividades de la aplicación (README, sección 10).';
     if (!c.interaction) {
       await c.reply({ content: `${howTo}\nTambién podés usar \`/jugar\` para abrirlo directo.` });
       return;
