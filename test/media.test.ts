@@ -76,11 +76,15 @@ describe('kiss: corresponder y rechazar', () => {
     assert.equal(kissCount(w.ctx, G, U, U2), 1);
   });
 
-  it('si corresponder falla (espera), la respuesta no queda marcada y se puede reintentar', () => {
+  it('corresponder no usa la espera de besos (es una respuesta única por mensaje)', () => {
     const w = makeWorld();
-    kiss(w.ctx, G, U2, '200000000000000999'); // U2 acaba de besar a otra persona: está en espera
-    expectGameError(() => kissBack(w.ctx, 'msg3', G, U2, U), /próximo beso/);
-    w.clock.advance(6000);
+    kiss(w.ctx, G, U2, '200000000000000999'); // U2 acaba de besar a otra persona: su espera está activa
     assert.equal(kissBack(w.ctx, 'msg3', G, U2, U).pair, 1);
+  });
+
+  it('si corresponder falla, la respuesta no queda marcada y se puede reintentar', () => {
+    const w = makeWorld();
+    expectGameError(() => kissBack(w.ctx, 'msg4', G, U, U), /vos mismo/);
+    assert.equal(kissBack(w.ctx, 'msg4', G, U2, U).pair, 1, 'la marca del intento fallido se deshizo con la transacción');
   });
 });
