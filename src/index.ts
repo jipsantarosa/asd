@@ -13,6 +13,7 @@ import { startMediaTracking } from './discord/tracking/userMedia';
 import { autoRegisterCommands } from './discord/registerCommands';
 import { loadOwners } from './discord/owner';
 import { startAutoplayScheduler } from './discord/autoplay';
+import { startTempVoice } from './discord/voice/tempVoice';
 import { pruneEphemeral } from './services/limits';
 import type { App } from './discord/app';
 import { onInteraction } from './discord/handlers/interactions';
@@ -126,6 +127,8 @@ async function main(): Promise<void> {
   const notices = startNoticeSweeper(app);
   // !autoplay (premium): turnos automáticos de pesca y granja.
   const autoplay = startAutoplayScheduler(app);
+  // Canales de voz temporales: crear al entrar al hub, borrar vacíos y reconciliar tras reinicios.
+  const tempVoice = startTempVoice(app);
 
   // Mantenimiento periódico: sesiones de pesca abandonadas, cooldowns viejos, memoria del antispam.
   const sweep = setInterval(() => {
@@ -148,6 +151,7 @@ async function main(): Promise<void> {
     clearInterval(events);
     clearInterval(notices);
     clearInterval(autoplay);
+    clearInterval(tempVoice);
     activity?.close();
     await client.destroy().catch(() => undefined);
     db.close();

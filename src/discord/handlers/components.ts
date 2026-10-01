@@ -1,6 +1,6 @@
 import {
   ActionRowBuilder, ChannelType, EmbedBuilder, MessageFlags, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle,
-  type MessageComponentInteraction, type ModalSubmitInteraction, type TextChannel, type NewsChannel,
+  type TextChannel, type NewsChannel,
 } from 'discord.js';
 import { getItem, getTunable } from '../../game/config';
 import type { EquipSlot } from '../../game/types';
@@ -35,7 +35,6 @@ import { fetchAndRecord } from '../tracking/userMedia';
 import { kissButtons, kissEmbed, rejectedEmbed } from '../ui/kissPanels';
 import { randomKissGif } from '../fun/kissGif';
 import { answeredText, claimKissReply, getKiss, kissBack, rejectKiss, returnKiss, setKissReply } from '../../services/social';
-import type { ParsedId } from '../ui/ids';
 import { cid } from '../ui/ids';
 import { ACH_FILTERS, HELP_PAGE_IDS, INV_FILTER_IDS, achievementsPanel, helpPanel, inventoryPanel, profilePanel, type AchFilter, type HelpPage, type InvFilter } from '../ui/infoPanels';
 import { MARKET_SECTIONS, marketPanel, quantityModalTitle, resultNotice, type MarketSection } from '../ui/marketPanel';
@@ -46,40 +45,13 @@ import { eventsAdminPanel } from '../ui/eventPanels';
 import { launchEvent } from '../events/scheduler';
 import { joinEvent, setEventChannel, setEventsEnabled, getEventConfig } from '../../services/events';
 import { TOP_CATEGORIES, type TopCategory } from '../../services/leaderboard';
+import { deferPanel, field, update, values, type Handler as UiHandler, type Ix } from './util';
+import { voiceAdminHandler, voiceHandler } from './voice';
 
-export type Ix = MessageComponentInteraction<'cached'> | ModalSubmitInteraction<'cached'>;
-type Handler = (app: App, i: Ix, id: ParsedId) => Promise<void>;
+export type { Ix } from './util';
+type Handler = UiHandler;
 
 // ───────────────────────── utilidades ─────────────────────────
-
-function values(i: Ix): string[] {
-  return i.isAnySelectMenu() ? i.values : [];
-}
-
-function field(i: Ix, name: string): string {
-  if (!i.isModalSubmit()) return '';
-  return i.fields.getTextInputValue(name).trim();
-}
-
-/**
- * Reemplaza el panel en el mismo mensaje. Si el handler ya hizo deferUpdate() (porque iba a tardar
- * más de 3 s hablando con Discord), edita la respuesta diferida en lugar de responder de nuevo.
- */
-export async function update(i: Ix, panel: Panel): Promise<void> {
-  // attachments: [] quita las imágenes del panel anterior; files agrega las del nuevo (si tiene).
-  const body = { embeds: panel.embeds, components: panel.components, files: panel.files ?? [], attachments: [], allowedMentions: { parse: [] } };
-  if (i.deferred || i.replied) await i.editReply(body);
-  else if (i.isMessageComponent()) await i.update(body);
-  else if (i.isFromMessage()) await i.update(body);
-  else await i.reply({ embeds: body.embeds, components: body.components, files: body.files, allowedMentions: body.allowedMentions, flags: MessageFlags.Ephemeral });
-}
-
-/** Avisa a Discord que la respuesta va a tardar (la edición llega después con update()). */
-export async function deferPanel(i: Ix): Promise<void> {
-  if (i.deferred || i.replied) return;
-  if (i.isMessageComponent() || i.isFromMessage()) await i.deferUpdate();
-  else await i.deferReply({ flags: MessageFlags.Ephemeral });
-}
 
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T {
   if (!value || !allowed.includes(value as T)) throw new GameError('Opción inválida.');
@@ -733,6 +705,8 @@ const premiumHandler: Handler = async (app, i, id) => {
 };
 
 export const HANDLERS: Record<string, Handler> = {
+  vc: voiceHandler,
+  va: voiceAdminHandler,
   pr: premiumHandler,
   ks: kissHandler,
   av: mediaHandler,
