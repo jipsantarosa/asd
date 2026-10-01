@@ -1,0 +1,548 @@
+import type { Db } from './types';
+
+export interface Migration {
+  id: number;
+  name: string;
+  sql: string;
+}
+
+/**
+ * Migraciones versionadas. NUNCA edites una migración ya aplicada en producción:
+ * agregá una nueva con el siguiente id.
+ */
+export const MIGRATIONS: Migration[] = [
+  {
+    id: 1,
+    name: 'esquema_inicial',
+    sql: `
+CREATE TABLE guild_settings (
+  guild_id   TEXT PRIMARY KEY,
+  prefix     TEXT NOT NULL,
+  tunables   TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE profiles (
+  guild_id           TEXT NOT NULL,
+  user_id            TEXT NOT NULL,
+  coins              INTEGER NOT NULL DEFAULT 0 CHECK (coins >= 0),
+  vigor              REAL NOT NULL,
+  vigor_updated_at   INTEGER NOT NULL,
+  fatigue            REAL NOT NULL DEFAULT 0,
+  fatigue_updated_at INTEGER NOT NULL,
+  farm_level         INTEGER NOT NULL DEFAULT 1,
+  farm_xp            INTEGER NOT NULL DEFAULT 0,
+  fish_level         INTEGER NOT NULL DEFAULT 1,
+  fish_xp            INTEGER NOT NULL DEFAULT 0,
+  farm_zone          TEXT NOT NULL,
+  fish_spot          TEXT NOT NULL,
+  bait_id            TEXT NOT NULL,
+  fertilizer         INTEGER NOT NULL DEFAULT 0 CHECK (fertilizer >= 0),
+  farms_total        INTEGER NOT NULL DEFAULT 0,
+  catches_total      INTEGER NOT NULL DEFAULT 0,
+  last_farm_json     TEXT,
+  created_at         INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id)
+);
+
+CREATE TABLE inventory (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  item_id  TEXT NOT NULL,
+  quantity INTEGER NOT NULL CHECK (quantity >= 0),
+  PRIMARY KEY (guild_id, user_id, item_id)
+);
+
+CREATE TABLE equipment (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  slot     TEXT NOT NULL,
+  tier     INTEGER NOT NULL CHECK (tier >= 0),
+  PRIMARY KEY (guild_id, user_id, slot)
+);
+
+CREATE TABLE upgrades (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  upgrade_id TEXT NOT NULL,
+  level      INTEGER NOT NULL CHECK (level >= 0),
+  PRIMARY KEY (guild_id, user_id, upgrade_id)
+);
+
+CREATE TABLE unlocks (
+  guild_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  unlock_id   TEXT NOT NULL,
+  unlocked_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id, unlock_id)
+);
+
+CREATE TABLE cooldowns (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  action   TEXT NOT NULL,
+  ready_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id, action)
+);
+
+CREATE TABLE daily_counters (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  counter  TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  count    INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id, counter, day)
+);
+
+CREATE TABLE fish_log (
+  guild_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  fish_id     TEXT NOT NULL,
+  caught      INTEGER NOT NULL,
+  best_weight REAL NOT NULL,
+  first_at    INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id, fish_id)
+);
+
+CREATE TABLE milestones (
+  guild_id     TEXT NOT NULL,
+  user_id      TEXT NOT NULL,
+  milestone_id TEXT NOT NULL,
+  claimed_at   INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id, milestone_id)
+);
+
+CREATE TABLE fishing_sessions (
+  id         TEXT PRIMARY KEY,
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  spot_id    TEXT NOT NULL,
+  fish_id    TEXT NOT NULL,
+  weight     REAL NOT NULL,
+  bait_id    TEXT NOT NULL,
+  tension    REAL NOT NULL,
+  progress   REAL NOT NULL,
+  round      INTEGER NOT NULL,
+  behavior   TEXT NOT NULL,
+  hint       TEXT NOT NULL,
+  state      TEXT NOT NULL CHECK (state IN ('active','caught','escaped','snapped','expired','released')),
+  last_event TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+-- Una sola sesión activa por usuario: la base de datos lo garantiza aunque lleguen clics simultáneos.
+CREATE UNIQUE INDEX ux_fishing_one_active ON fishing_sessions (guild_id, user_id) WHERE state = 'active';
+CREATE INDEX ix_fishing_expiry ON fishing_sessions (state, expires_at);
+
+CREATE TABLE market_supply (
+  guild_id   TEXT NOT NULL,
+  item_id    TEXT NOT NULL,
+  units      REAL NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, item_id)
+);
+
+CREATE TABLE ledger (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  delta      INTEGER NOT NULL,
+  balance    INTEGER NOT NULL,
+  reason     TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX ix_ledger_user ON ledger (guild_id, user_id, created_at);
+
+CREATE TABLE role_groups (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id        TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  description     TEXT NOT NULL DEFAULT '',
+  mode            TEXT NOT NULL CHECK (mode IN ('libre','unico')),
+  min_total_level INTEGER NOT NULL DEFAULT 0,
+  channel_id      TEXT,
+  message_id      TEXT,
+  created_at      INTEGER NOT NULL
+);
+CREATE INDEX ix_role_groups_guild ON role_groups (guild_id);
+
+CREATE TABLE role_group_entries (
+  group_id INTEGER NOT NULL REFERENCES role_groups(id) ON DELETE CASCADE,
+  role_id  TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (group_id, role_id)
+);
+
+CREATE TABLE role_rewards (
+  guild_id TEXT NOT NULL,
+  role_id  TEXT NOT NULL,
+  skill    TEXT NOT NULL CHECK (skill IN ('granja','pesca','total')),
+  level    INTEGER NOT NULL CHECK (level >= 1),
+  PRIMARY KEY (guild_id, role_id)
+);
+
+CREATE TABLE log_config (
+  guild_id          TEXT PRIMARY KEY,
+  category_id       TEXT,
+  staff_role_id     TEXT,
+  log_sent_messages INTEGER NOT NULL DEFAULT 1,
+  updated_at        INTEGER NOT NULL
+);
+
+CREATE TABLE log_channels (
+  guild_id   TEXT NOT NULL,
+  log_key    TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  PRIMARY KEY (guild_id, log_key)
+);
+`,
+  },
+  {
+    id: 2,
+    name: 'pesca_simple_canas_buffs_eventos',
+    sql: `
+-- ── Pesca nueva: caña equipada y racha de la suerte ──
+ALTER TABLE profiles ADD COLUMN rod_id TEXT NOT NULL DEFAULT 'junco';
+ALTER TABLE profiles ADD COLUMN fish_pity INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE rods_owned (
+  guild_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  rod_id      TEXT NOT NULL,
+  acquired_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id, rod_id)
+);
+
+-- ── Potenciadores temporales (user_id = '*' → buff de todo el servidor) ──
+CREATE TABLE buffs (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  buff_id    TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  source     TEXT NOT NULL,
+  PRIMARY KEY (guild_id, user_id, buff_id)
+);
+CREATE INDEX ix_buffs_expires ON buffs (expires_at);
+
+-- ── Eventos automáticos ──
+CREATE TABLE event_config (
+  guild_id   TEXT PRIMARY KEY,
+  channel_id TEXT,
+  enabled    INTEGER NOT NULL DEFAULT 0,
+  next_at    INTEGER,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE events (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT NOT NULL,
+  channel_id  TEXT NOT NULL,
+  message_id  TEXT,
+  kind        TEXT NOT NULL CHECK (kind IN ('sorteo', 'marea')),
+  reward_json TEXT NOT NULL,
+  winners     INTEGER NOT NULL DEFAULT 1,
+  state       TEXT NOT NULL CHECK (state IN ('open', 'closed', 'cancelled')),
+  created_at  INTEGER NOT NULL,
+  ends_at     INTEGER NOT NULL,
+  result_json TEXT
+);
+-- Nunca dos sorteos abiertos a la vez en el mismo servidor (ni con dos procesos ni tras un reinicio).
+CREATE UNIQUE INDEX ux_events_one_open ON events (guild_id) WHERE state = 'open';
+CREATE INDEX ix_events_due ON events (state, ends_at);
+
+CREATE TABLE event_entries (
+  event_id  INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL,
+  joined_at INTEGER NOT NULL,
+  PRIMARY KEY (event_id, user_id)
+);
+
+CREATE TABLE event_wins (
+  event_id    INTEGER NOT NULL,
+  guild_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  day         TEXT NOT NULL,
+  reward_json TEXT NOT NULL,
+  PRIMARY KEY (event_id, user_id)
+);
+CREATE INDEX ix_event_wins_day ON event_wins (guild_id, user_id, day);
+
+-- ── Conversión de datos de la pesca anterior (sin borrar nada) ──
+-- 1) La caña vieja (tier 1..5) se convierte en las cañas nuevas equivalentes.
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT guild_id, user_id, 'sauce', 0 FROM equipment WHERE slot = 'cana' AND tier >= 1;
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT guild_id, user_id, 'tejedora', 0 FROM equipment WHERE slot = 'cana' AND tier >= 2;
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT guild_id, user_id, 'coral', 0 FROM equipment WHERE slot = 'cana' AND tier >= 3;
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT guild_id, user_id, 'brujula', 0 FROM equipment WHERE slot = 'cana' AND tier >= 4;
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT guild_id, user_id, 'abismo', 0 FROM equipment WHERE slot = 'cana' AND tier >= 5;
+UPDATE profiles SET rod_id = COALESCE((
+  SELECT CASE MIN(e.tier, 5) WHEN 1 THEN 'sauce' WHEN 2 THEN 'tejedora' WHEN 3 THEN 'coral' WHEN 4 THEN 'brujula' WHEN 5 THEN 'abismo' ELSE 'junco' END
+  FROM equipment e WHERE e.guild_id = profiles.guild_id AND e.user_id = profiles.user_id AND e.slot = 'cana'
+), 'junco');
+
+-- 2) Los carretes ya no existen: se reintegra lo pagado.
+CREATE TEMP TABLE refunds (guild_id TEXT, user_id TEXT, amount INTEGER, reason TEXT);
+INSERT INTO refunds
+  SELECT guild_id, user_id,
+    CASE MIN(tier, 4) WHEN 1 THEN 2500 WHEN 2 THEN 22500 WHEN 3 THEN 132500 WHEN 4 THEN 582500 ELSE 0 END,
+    'reintegro de carrete (nueva pesca)'
+  FROM equipment WHERE slot = 'carrete' AND tier >= 1;
+-- 3) Los permisos de lugares de pesca ya no existen: se reintegran (y el mapa usado para la fosa se devuelve).
+INSERT INTO refunds
+  SELECT guild_id, user_id,
+    CASE unlock_id WHEN 'lugar:lago' THEN 3000 WHEN 'lugar:delta' THEN 22000 WHEN 'lugar:mar_abierto' THEN 110000 WHEN 'lugar:fosa_abisal' THEN 480000 ELSE 0 END,
+    'reintegro de permiso ' || unlock_id
+  FROM unlocks WHERE unlock_id LIKE 'lugar:%';
+DELETE FROM refunds WHERE amount <= 0;
+UPDATE profiles SET coins = coins + COALESCE((SELECT SUM(r.amount) FROM refunds r WHERE r.guild_id = profiles.guild_id AND r.user_id = profiles.user_id), 0);
+INSERT INTO ledger (guild_id, user_id, delta, balance, reason, created_at)
+  SELECT r.guild_id, r.user_id, r.amount, p.coins, r.reason, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+  FROM refunds r JOIN profiles p ON p.guild_id = r.guild_id AND p.user_id = r.user_id;
+INSERT INTO inventory (guild_id, user_id, item_id, quantity)
+  SELECT guild_id, user_id, 'mapa_corrientes', 1 FROM unlocks WHERE unlock_id = 'lugar:fosa_abisal'
+  ON CONFLICT (guild_id, user_id, item_id) DO UPDATE SET quantity = quantity + 1;
+DROP TABLE refunds;
+
+-- 4) Las peleas del minijuego anterior quedan cerradas.
+UPDATE fishing_sessions SET state = 'expired', last_event = 'migracion' WHERE state = 'active';
+`,
+  },
+  {
+    id: 3,
+    name: 'logros_actividad_tienda',
+    sql: `
+-- ── Puntos de actividad (para distinciones por actividad y ranking) ──
+ALTER TABLE profiles ADD COLUMN activity_points INTEGER NOT NULL DEFAULT 0;
+
+-- ── Contadores acumulados por jugador (métricas de logros) ──
+CREATE TABLE player_stats (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  stat     TEXT NOT NULL,
+  value    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, user_id, stat)
+);
+
+-- ── Logros desbloqueados + estado del aviso por DM ──
+CREATE TABLE achievements_unlocked (
+  guild_id       TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  achievement_id TEXT NOT NULL,
+  unlocked_at    INTEGER NOT NULL,
+  dm_status      TEXT NOT NULL DEFAULT 'pendiente' CHECK (dm_status IN ('pendiente','enviando','enviado','bloqueado','fallido')),
+  dm_attempts    INTEGER NOT NULL DEFAULT 0,
+  notified_at    INTEGER,
+  PRIMARY KEY (guild_id, user_id, achievement_id)
+);
+CREATE INDEX ix_ach_pending ON achievements_unlocked (dm_status, unlocked_at);
+
+-- ── Distinciones: se agrega la "habilidad" actividad (umbral = puntos) ──
+CREATE TABLE role_rewards_new (
+  guild_id TEXT NOT NULL,
+  role_id  TEXT NOT NULL,
+  skill    TEXT NOT NULL CHECK (skill IN ('granja','pesca','total','actividad')),
+  level    INTEGER NOT NULL CHECK (level >= 1),
+  PRIMARY KEY (guild_id, role_id)
+);
+INSERT INTO role_rewards_new SELECT guild_id, role_id, skill, level FROM role_rewards;
+DROP TABLE role_rewards;
+ALTER TABLE role_rewards_new RENAME TO role_rewards;
+
+-- ── Cañas nuevas intermedias: quien ya tenía una caña superior recibe las nuevas que quedaron por debajo ──
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT DISTINCT guild_id, user_id, 'corcho', 0 FROM rods_owned WHERE rod_id IN ('sauce','tejedora','coral','relampago','brujula','abismo','astro');
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT DISTINCT guild_id, user_id, 'boya_roja', 0 FROM rods_owned WHERE rod_id IN ('coral','relampago','brujula','abismo','astro');
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT DISTINCT guild_id, user_id, 'marea_azul', 0 FROM rods_owned WHERE rod_id IN ('relampago','brujula','abismo','astro');
+INSERT OR IGNORE INTO rods_owned (guild_id, user_id, rod_id, acquired_at)
+  SELECT DISTINCT guild_id, user_id, 'camuflaje', 0 FROM rods_owned WHERE rod_id IN ('brujula','abismo','astro');
+
+-- ── Estadísticas reconstruidas a partir de datos existentes (los veteranos no empiezan de cero) ──
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:rare_caught', SUM(caught) FROM fish_log WHERE fish_id IN ('trucha_arcoiris','surubi','manguruyu','atun_rojo','pulpo_dumbo','bagre_albino','anguila_plateada','tortuga_delta','tiburon_azul','medusa_abisal','esturion_dorado','pez_luna','celacanto','koi_eclipse','leviatan_cristal') GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:epic_caught', SUM(caught) FROM fish_log WHERE fish_id IN ('bagre_albino','anguila_plateada','tortuga_delta','tiburon_azul','medusa_abisal','esturion_dorado','pez_luna','celacanto','koi_eclipse','leviatan_cristal') GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:legend_caught', SUM(caught) FROM fish_log WHERE fish_id IN ('esturion_dorado','pez_luna','celacanto','koi_eclipse','leviatan_cristal') GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:ultra_caught', SUM(caught) FROM fish_log WHERE fish_id IN ('koi_eclipse','leviatan_cristal') GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:coins_from_sales', SUM(delta) FROM ledger WHERE reason LIKE 'venta %' AND delta > 0 GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:items_sold', COUNT(*) FROM ledger WHERE reason LIKE 'venta %' AND delta > 0 GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:coins_spent', -SUM(delta) FROM ledger
+  WHERE delta < 0 AND (reason LIKE 'compra %' OR reason LIKE 'equipo %' OR reason LIKE 'caña %' OR reason LIKE 'permiso %' OR reason LIKE 'mejora %')
+  GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:purchases', COUNT(*) FROM ledger
+  WHERE delta <= -50 AND (reason LIKE 'compra %' OR reason LIKE 'equipo %' OR reason LIKE 'caña %' OR reason LIKE 'permiso %' OR reason LIKE 'mejora %')
+  GROUP BY guild_id, user_id;
+INSERT INTO player_stats (guild_id, user_id, stat, value)
+  SELECT guild_id, user_id, 'stat:events_won', COUNT(*) FROM event_wins GROUP BY guild_id, user_id;
+`,
+  },
+  {
+    id: 4,
+    name: 'avatares_banners_kiss',
+    sql: `
+-- ── Historial de avatares y banners detectados por el bot (desde que existe esta tabla) ──
+-- Una fila por imagen distinta: si alguien vuelve a una imagen anterior, se actualiza last_seen_at.
+CREATE TABLE user_media (
+  user_id       TEXT NOT NULL,
+  kind          TEXT NOT NULL CHECK (kind IN ('avatar', 'banner')),
+  hash          TEXT NOT NULL,
+  url           TEXT NOT NULL,
+  guild_id      TEXT,
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, kind, hash)
+);
+CREATE INDEX ix_user_media_recent ON user_media (user_id, kind, last_seen_at DESC);
+
+-- ── Besos: contador por pareja (clave canónica user_a < user_b) y totales por persona ──
+CREATE TABLE kiss_pairs (
+  guild_id TEXT NOT NULL,
+  user_a   TEXT NOT NULL,
+  user_b   TEXT NOT NULL,
+  count    INTEGER NOT NULL DEFAULT 0,
+  last_at  INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_a, user_b),
+  CHECK (user_a < user_b)
+);
+CREATE TABLE kiss_stats (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  given    INTEGER NOT NULL DEFAULT 0,
+  received INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, user_id)
+);
+`,
+  },
+  {
+    id: 5,
+    name: 'lago_de_pesca',
+    sql: `
+-- ── El lago de cada jugador: las casillas se guardan en el servidor (no se pueden falsificar desde un botón) ──
+CREATE TABLE fishing_lakes (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  layout     TEXT NOT NULL,
+  seq        INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id)
+);
+`,
+  },
+  {
+    id: 6,
+    name: 'kiss_respuestas',
+    sql: `
+-- ── Respuestas a un beso (Corresponder / Rechazar): una sola por mensaje, aunque se toque dos veces ──
+CREATE TABLE kiss_replies (
+  message_id TEXT PRIMARY KEY,
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  response   TEXT NOT NULL CHECK (response IN ('correspondido', 'rechazado')),
+  created_at INTEGER NOT NULL
+);
+`,
+  },
+  {
+    id: 7,
+    name: 'premium_nombres_tags_vistas',
+    sql: `
+-- ── Premium: un nivel por usuario (lo da solo el dueño del bot). expires_at NULL = sin vencimiento ──
+CREATE TABLE premium (
+  user_id    TEXT PRIMARY KEY,
+  tier       INTEGER NOT NULL CHECK (tier BETWEEN 1 AND 4),
+  granted_by TEXT NOT NULL,
+  granted_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  ghost_mode INTEGER NOT NULL DEFAULT 0
+);
+
+-- ── Historial de nombres y tags (solo lo que el bot ve desde ahora) ──
+-- kind: username (@usuario), display (nombre visible), nick (apodo en un servidor), tag (tag de servidor).
+-- scope: '' para lo global; id del servidor para apodos; id del servidor del tag para tags.
+CREATE TABLE user_names (
+  user_id       TEXT NOT NULL,
+  kind          TEXT NOT NULL CHECK (kind IN ('username', 'display', 'nick', 'tag')),
+  scope         TEXT NOT NULL DEFAULT '',
+  value         TEXT NOT NULL,
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, kind, scope, value)
+);
+CREATE INDEX ix_user_names_recent ON user_names (user_id, kind, last_seen_at DESC);
+
+-- ── Quién miró los historiales de quién (para !mstats). Con ghostmode no se registra al que mira ──
+CREATE TABLE history_views (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_id  TEXT NOT NULL,
+  viewer_id  TEXT NOT NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('avatar', 'banner', 'names', 'tags')),
+  guild_id   TEXT,
+  viewed_at  INTEGER NOT NULL
+);
+CREATE INDEX ix_history_views_target ON history_views (target_id, viewed_at DESC);
+
+-- ── Tier 4: servidores donde el usuario personalizó el perfil del bot ──
+CREATE TABLE bot_profile_slots (
+  user_id    TEXT NOT NULL,
+  guild_id   TEXT NOT NULL,
+  claimed_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, guild_id)
+);
+CREATE UNIQUE INDEX ux_bot_profile_guild ON bot_profile_slots (guild_id);
+`,
+  },
+  {
+    id: 8,
+    name: 'autoplay_y_servidores_premium',
+    sql: `
+-- ── !autoplay (Tier 2+): el bot pesca y farmea por vos cada cierto tiempo, en el servidor donde lo activaste ──
+CREATE TABLE autoplay (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  next_at    INTEGER NOT NULL,
+  started_at INTEGER NOT NULL,
+  harvests   INTEGER NOT NULL DEFAULT 0,
+  catches    INTEGER NOT NULL DEFAULT 0,
+  runs       INTEGER NOT NULL DEFAULT 0,
+  last_at    INTEGER,
+  last_note  TEXT,
+  PRIMARY KEY (guild_id, user_id)
+);
+CREATE INDEX ix_autoplay_due ON autoplay (enabled, next_at);
+
+-- ── Tier 4: cuántos servidores puede personalizar cada persona con !botperfil (lo elige el dueño) ──
+ALTER TABLE premium ADD COLUMN bot_slots INTEGER NOT NULL DEFAULT 3;
+`,
+  },
+];
+
+export function runMigrations(db: Db, now: number = Date.now()): number[] {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)`);
+  const applied = new Set(db.all<{ id: number }>('SELECT id FROM schema_migrations').map((r) => r.id));
+  const done: number[] = [];
+  for (const m of [...MIGRATIONS].sort((a, b) => a.id - b.id)) {
+    if (applied.has(m.id)) continue;
+    db.transaction(() => {
+      db.exec(m.sql);
+      db.run('INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)', m.id, m.name, now);
+    });
+    done.push(m.id);
+  }
+  return done;
+}
