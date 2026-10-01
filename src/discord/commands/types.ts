@@ -15,10 +15,15 @@ export interface CommandContext {
   message: Message<true> | null;
   /** Argumentos crudos del comando por prefijo. */
   args: string[];
-  reply(payload: Partial<Panel> & { content?: string }, opts?: { ephemeral?: boolean }): Promise<void>;
+  /** Responde y devuelve el mensaje cuando Discord lo informa (siempre por prefijo; en slash, si la respuesta estaba diferida). */
+  reply(payload: Partial<Panel> & { content?: string }, opts?: { ephemeral?: boolean }): Promise<Message | null>;
   defer(ephemeral?: boolean): Promise<void>;
   /** Opción de texto: slash por nombre, prefijo por posición. */
   str(name: string, index: number): string | null;
+  /** Texto libre: slash por nombre; por prefijo, todo lo que viene desde esa posición (p. ej. un motivo con espacios). */
+  text(name: string, index: number): string | null;
+  /** Número entero: slash por nombre, prefijo por posición (acepta "1.000"). */
+  int(name: string, index: number): number | null;
   bool(name: string, index: number): boolean | null;
   member_(name: string, index: number): Promise<GuildMember | null>;
   /** Usuario (aunque ya no esté en el servidor): mención o ID. */
@@ -34,7 +39,8 @@ export interface Command {
   /** Permiso requerido tanto en slash como por prefijo. */
   permission?: bigint;
   permissionName?: string;
-  data: { toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody };
+  /** Definición del comando de barra. Sin ella, el comando es solo por prefijo (p. ej. !warn, que en slash es /mod warn). */
+  data?: { toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody };
   run(c: CommandContext): Promise<void>;
 }
 
@@ -64,11 +70,12 @@ export function buildContext(opts: {
     async reply(payload, o) {
       const body = { content: payload.content, embeds: payload.embeds ?? [], components: payload.components ?? [], files: payload.files ?? [], allowedMentions: { parse: [] } };
       if (interaction) {
-        if (interaction.deferred || interaction.replied) await interaction.editReply(body);
-        else await interaction.reply({ ...body, flags: o?.ephemeral ? MessageFlags.Ephemeral : undefined });
-      } else if (message) {
-        await message.reply({ ...body, allowedMentions: { parse: [], repliedUser: false } });
+        if (interaction.deferred || interaction.replied) return interaction.editReply(body);
+        await interaction.reply({ ...body, flags: o?.ephemeral ? MessageFlags.Ephemeral : undefined });
+        return null;
       }
+      if (message) return message.reply({ ...body, allowedMentions: { parse: [], repliedUser: false } });
+      return null;
     },
     async defer(ephemeral) {
       if (interaction && !interaction.deferred && !interaction.replied) {
@@ -80,6 +87,17 @@ export function buildContext(opts: {
     str(name, index) {
       if (interaction) return interaction.options.getString(name);
       return args[index] ?? null;
+    },
+    text(name, index) {
+      if (interaction) return interaction.options.getString(name);
+      const t = args.slice(index).join(' ').trim();
+      return t || null;
+    },
+    int(name, index) {
+      if (interaction) return interaction.options.getInteger(name);
+      const raw = args[index]?.replace(/\./g, '');
+      if (!raw || !/^-?\d{1,12}$/.test(raw)) return null;
+      return Number(raw);
     },
     bool(name, index) {
       if (interaction) return interaction.options.getBoolean(name);

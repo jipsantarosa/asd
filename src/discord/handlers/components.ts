@@ -23,6 +23,7 @@ import {
 import { viewerOf, type App, type NavTarget, type Panel } from '../app';
 import { logSystem } from '../logging/sender';
 import { roleProblem, syncRewardRoles } from '../roleSafety';
+import { clean } from '../ui/theme';
 import { farmPanel, levelUpNotice } from '../ui/farmPanel';
 import { fishPanel, outcomeLines } from '../ui/fishPanel';
 import { mediaPanel, mediaStats } from '../ui/mediaPanels';
@@ -31,9 +32,9 @@ import { requireTier } from '../../services/premium';
 import { clearMedia } from '../../services/userMedia';
 import { clearNames, recordName } from '../../services/userNames';
 import { fetchAndRecord } from '../tracking/userMedia';
-import { kissAnsweredRow, kissEmbed } from '../ui/kissPanels';
+import { kissButtons, kissEmbed, rejectedEmbed } from '../ui/kissPanels';
 import { randomKissGif } from '../fun/kissGif';
-import { claimKissReply, kissBack } from '../../services/social';
+import { answeredText, claimKissReply, getKiss, kissBack, rejectKiss, returnKiss, setKissReply } from '../../services/social';
 import type { ParsedId } from '../ui/ids';
 import { cid } from '../ui/ids';
 import { ACH_FILTERS, HELP_PAGE_IDS, INV_FILTER_IDS, achievementsPanel, helpPanel, inventoryPanel, profilePanel, type AchFilter, type HelpPage, type InvFilter } from '../ui/infoPanels';
@@ -643,36 +644,66 @@ const mediaHandler: Handler = async (app, i, id) => {
 
 // ───────────────────────── kiss: corresponder / rechazar ─────────────────────────
 
+const SNOWFLAKE = /^\d{17,20}$/;
+
+/**
+ * Corresponder: crea un mensaje NUEVO que responde al original ("¡h besa a salo de vuelta!", contador
+ * actualizado y otro GIF) y desactiva los botones del original.
+ * Anti doble clic: el beso pasa de "abierto" a "correspondido" con un UPDATE condicional dentro de la misma
+ * transacción que suma el contador; el segundo clic (o un panel viejo) no suma nada. Además el candado por
+ * usuario evita que dos clics de la misma persona se procesen a la vez.
+ */
 const kissHandler: Handler = async (app, i, id) => {
-  const [authorId = '', targetId = ''] = id.args;
-  if (!/^\d{17,20}$/.test(authorId) || !/^\d{17,20}$/.test(targetId)) throw new GameError('Botón inválido.');
-  if (i.user.id !== targetId) {
-    await i.reply({ content: `💌 Solo <@${targetId}> puede responder este beso.`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
-    return;
-  }
-  if (!i.isMessageComponent()) return;
-  const author = await i.guild.members.fetch(authorId).catch(() => null);
-  const authorName = author?.displayName ?? 'alguien';
+  if (!i.isButton()) throw new GameError('Acción desconocida.');
+  const { ctx } = app;
+  if (id.act !== 'back' && id.act !== 'no') throw new GameError('Este beso ya fue respondido. 💌');
+
+  // Botones nuevos: g:ks:<acción>:0:<idDelBeso>. Botones viejos: g:ks:<acción>:0:<autor>:<destinatario>.
+  const legacy = id.args.length === 2 && SNOWFLAKE.test(id.args[0]) && SNOWFLAKE.test(id.args[1]);
+  const k = legacy ? null : getKiss(ctx, i.guild.id, Number(id.args[0]));
+  if (!legacy && !k) throw new GameError('Ese beso ya no existe.');
+  const authorId = legacy ? id.args[0] : k!.author_id;
+  const targetId = legacy ? id.args[1] : k!.target_id;
+  const nameOf = (userId: string, stored: string) => i.guild.members.cache.get(userId)?.displayName ?? stored;
+  const authorName = nameOf(authorId, k?.author_name ?? 'alguien');
   const targetName = i.member.displayName;
-  if (id.act === 'back') {
-    // Marca + beso de vuelta en una transacción: un doble clic no suma dos veces.
-    const r = kissBack(app.ctx, i.message.id, i.guild.id, targetId, authorId);
-    await i.deferUpdate();
-    const gif = await randomKissGif();
-    await i.editReply({
-      embeds: [kissEmbed({ authorName: targetName, targetName: authorName, authorId: targetId, targetId: authorId, result: r, gif, back: true })],
-      components: [kissAnsweredRow('correspondido')],
-    });
+
+  if (i.user.id !== targetId) {
+    await i.reply({ content: `💌 Solo **${clean(nameOf(targetId, k?.target_name ?? 'quien recibió el beso'))}** puede responder este beso.`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     return;
   }
+  // Ya respondido (otro clic, otra pestaña o un reinicio a mitad de camino): se dejan los botones como corresponden.
+  if (k && k.state !== 'open') {
+    await i.update({ components: [kissButtons(k.id, k.state)] });
+    await i.followUp({ content: answeredText(k.state), flags: MessageFlags.Ephemeral }).catch(() => undefined);
+    return;
+  }
+  const buttons = (state: 'returned' | 'rejected') => kissButtons(k?.id ?? null, state, legacy ? id.args : []);
+
   if (id.act === 'no') {
-    claimKissReply(app.ctx, i.message.id, i.guild.id, targetId, 'rechazado');
-    const old = i.message.embeds[0] ? EmbedBuilder.from(i.message.embeds[0]) : new EmbedBuilder();
-    old.setColor(0x80848e).setDescription(`${old.data.description ?? ''}\n\n💔 **${targetName}** rechazó el beso.`.slice(0, 4000));
-    await i.update({ embeds: [old], components: [kissAnsweredRow('rechazado')] });
+    if (k) rejectKiss(ctx, i.guild.id, k.id, i.user.id);
+    else claimKissReply(ctx, i.message.id, i.guild.id, i.user.id, 'rechazado');
+    const original = i.message.embeds[0] ? EmbedBuilder.from(i.message.embeds[0]) : new EmbedBuilder();
+    await i.update({ embeds: [rejectedEmbed(original, targetName)], components: [buttons('rejected')] });
     return;
   }
-  throw new GameError('Este beso ya fue respondido. 💌');
+
+  // Corresponder: primero se marca y se cuenta (atómico); recién después se habla con Discord.
+  const pair = k ? returnKiss(ctx, i.guild.id, k.id, i.user.id).result.pair : kissBack(ctx, i.message.id, i.guild.id, i.user.id, authorId).pair;
+  // Desactiva los botones del original al instante (también es el acuse de la interacción).
+  await i.update({ components: [buttons('returned')] });
+  const gif = await randomKissGif({ exclude: [k?.gif_url, i.message.embeds[0]?.image?.url] });
+  const payload = { embeds: [kissEmbed({ from: targetName, to: authorName, count: pair, gif, back: true })], allowedMentions: { parse: [], repliedUser: false } };
+  const me = i.guild.members.me;
+  const canSend = !!i.channel && !!me && 'permissionsFor' in i.channel
+    && i.channel.permissionsFor(me).has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory]);
+  let replyId: string | null = null;
+  if (canSend && i.channel?.isSendable()) {
+    replyId = await i.channel.send({ ...payload, reply: { messageReference: i.message.id, failIfNotExists: false } }).then((m) => m.id).catch(() => null);
+  }
+  // Sin permisos en el canal: el seguimiento de la interacción no los necesita y queda igual como respuesta al beso.
+  if (!replyId) replyId = await i.followUp(payload).then((m) => m.id).catch(() => null);
+  if (k && replyId) setKissReply(ctx, k.id, replyId);
 };
 
 // ───────────────────────── premium: confirmar limpiezas ─────────────────────────

@@ -19,7 +19,7 @@ import { eventsAdminPanel } from '../ui/eventPanels';
 import { TOP_CATEGORIES, TOP_META, type TopCategory } from '../../services/leaderboard';
 import { Routes } from 'discord.js';
 import type { Command } from './types';
-import { avatares, banners, kissCmd, purgar } from './community';
+import { avatares, banners, besosCmd, kissCmd, purgar } from './community';
 import { autoplayCmd, botProfileCmd, clearAvatarsCmd, clearNamesCmd, clearTagsCmd, ghostCmd, mstatsCmd, namesCmd, premiumCmd, tagsCmd } from './premium';
 
 const granja: Command = {
@@ -213,7 +213,7 @@ const eventos: Command = {
   },
 };
 
-export const COMMANDS: Command[] = [granja, pesca, mercado, inventario, perfil, top, jugar, ayuda, prefijo, ajustes, roles, eventos, setup, purgar, avatares, banners, kissCmd,
+export const COMMANDS: Command[] = [granja, pesca, mercado, inventario, perfil, top, jugar, ayuda, prefijo, ajustes, roles, eventos, setup, purgar, avatares, banners, kissCmd, besosCmd,
   premiumCmd, namesCmd, tagsCmd, clearAvatarsCmd, clearNamesCmd, clearTagsCmd, mstatsCmd, ghostCmd, botProfileCmd, autoplayCmd];
 
 const byName = new Map<string, Command>();

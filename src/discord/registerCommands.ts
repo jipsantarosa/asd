@@ -7,7 +7,7 @@ import { COMMANDS } from './commands';
 
 /** JSON de los comandos de barra tal como se mandan a Discord. */
 export function commandsBody(): unknown[] {
-  return COMMANDS.map((c) => c.data.toJSON());
+  return COMMANDS.filter((c) => c.data).map((c) => c.data!.toJSON());
 }
 
 /** Huella de los comandos: si cambia (comando nuevo, opción nueva…), hay que volver a registrarlos. */

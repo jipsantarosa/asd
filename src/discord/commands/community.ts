@@ -1,13 +1,13 @@
 import { EmbedBuilder, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder, type GuildTextBasedChannel, type Message } from 'discord.js';
 import { GameError } from '../../services/context';
-import { kiss } from '../../services/social';
+import { attachKissMessage, createKiss, kissStats } from '../../services/social';
 import { logView } from '../../services/historyViews';
 import { logSystem } from '../logging/sender';
 import { randomKissGif } from '../fun/kissGif';
 import { PURGE_MAX, purgeUserMessages } from '../moderation/purge';
 import { fetchAndRecord } from '../tracking/userMedia';
 import { mediaPanel } from '../ui/mediaPanels';
-import { kissButtons, kissEmbed } from '../ui/kissPanels';
+import { kissButtons, kissEmbed, kissStatsEmbed } from '../ui/kissPanels';
 import { COLORS } from '../ui/theme';
 import type { Command, CommandContext } from './types';
 
@@ -142,13 +142,29 @@ export const kissCmd: Command = {
     const target = await c.member_('usuario', 0);
     if (!target) throw new GameError(`Uso: \`${c.prefix}kiss @usuario\``);
     if (target.user.bot) throw new GameError('Los bots no pueden recibir besos… todavía. 🤖');
-    // Primero se cuenta (atómico, con cooldown) y después se busca el GIF: si la API de GIFs falla, el beso igual cuenta.
-    const r = kiss(c.app.ctx, c.guild.id, c.member.id, target.id);
-    if (c.interaction) await c.defer();
+    if (target.id === c.member.id) throw new GameError('No te podés besar a vos mismo… ¡probá con alguien más! 💋');
+    // Primero se cuenta (atómico, con esperas anti spam) y después se busca el GIF: si la API de GIFs falla, el beso igual cuenta.
+    const { kissId, result } = createKiss(c.app.ctx, c.guild.id,
+      { id: c.member.id, name: c.member.displayName }, { id: target.id, name: target.displayName });
+    await c.defer();
     const gif = await randomKissGif();
-    await c.reply({
-      embeds: [kissEmbed({ authorName: c.member.displayName, targetName: target.displayName, authorId: c.member.id, targetId: target.id, result: r, gif })],
-      components: [kissButtons(c.member.id, target.id)],
+    const sent = await c.reply({
+      embeds: [kissEmbed({ from: c.member.displayName, to: target.displayName, count: result.pair, gif })],
+      components: [kissButtons(kissId, 'open')],
     });
+    attachKissMessage(c.app.ctx, kissId, sent?.channelId ?? null, sent?.id ?? null, gif?.url ?? null);
+  },
+};
+
+export const besosCmd: Command = {
+  name: 'besos',
+  aliases: ['kisses', 'kissstats'],
+  prefix: true,
+  data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('besos').setDescription('Cuántos besos diste y recibiste, y con quién más 💞')
+    .addUserOption((o) => o.setName('usuario').setDescription('De quién (por defecto, vos)')),
+  async run(c) {
+    const who = (await c.member_('usuario', 0)) ?? c.member;
+    if (who.user.bot) throw new GameError('Los bots no reciben besos… todavía. 🤖');
+    await c.reply({ embeds: [kissStatsEmbed(who.displayName, who.displayAvatarURL({ size: 64 }), kissStats(c.app.ctx, c.guild.id, who.id))] });
   },
 };

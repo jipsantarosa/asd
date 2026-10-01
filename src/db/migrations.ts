@@ -529,6 +529,112 @@ CREATE INDEX ix_autoplay_due ON autoplay (enabled, next_at);
 ALTER TABLE premium ADD COLUMN bot_slots INTEGER NOT NULL DEFAULT 3;
 `,
   },
+  {
+    id: 9,
+    name: 'besos_v2_voz_temporal_moderacion',
+    sql: `
+-- ── Besos: cada beso enviado tiene su fila. Los botones llevan solo el id del beso y el estado se
+--    cambia con un UPDATE condicional (open → returned/rejected): un doble clic o dos procesos no
+--    pueden responder dos veces ni sumar dos veces al contador. ──
+CREATE TABLE kisses (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id         TEXT NOT NULL,
+  author_id        TEXT NOT NULL,
+  target_id        TEXT NOT NULL,
+  author_name      TEXT NOT NULL,
+  target_name      TEXT NOT NULL,
+  channel_id       TEXT,
+  message_id       TEXT,
+  gif_url          TEXT,
+  state            TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'returned', 'rejected')),
+  created_at       INTEGER NOT NULL,
+  answered_at      INTEGER,
+  reply_message_id TEXT,
+  CHECK (author_id <> target_id)
+);
+CREATE INDEX ix_kisses_author ON kisses (guild_id, author_id, created_at);
+
+-- ── Canales de voz temporales ("unirse para crear") ──
+CREATE TABLE voice_config (
+  guild_id             TEXT PRIMARY KEY,
+  enabled              INTEGER NOT NULL DEFAULT 1,
+  category_id          TEXT,
+  hub_channel_id       TEXT,
+  interface_channel_id TEXT,
+  interface_message_id TEXT,
+  name_template        TEXT NOT NULL DEFAULT 'Canal de {usuario}',
+  default_limit        INTEGER NOT NULL DEFAULT 0 CHECK (default_limit BETWEEN 0 AND 99),
+  updated_at           INTEGER NOT NULL
+);
+-- Un canal temporal por dueño y servidor: la base de datos lo garantiza aunque entre y salga del hub muy rápido.
+CREATE TABLE temp_voice_channels (
+  channel_id TEXT PRIMARY KEY,
+  guild_id   TEXT NOT NULL,
+  owner_id   TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX ux_temp_voice_owner ON temp_voice_channels (guild_id, owner_id);
+-- Preferencias de cada dueño: se aplican al crear su próximo canal.
+CREATE TABLE voice_profiles (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  name       TEXT,
+  user_limit INTEGER CHECK (user_limit IS NULL OR user_limit BETWEEN 0 AND 99),
+  locked     INTEGER NOT NULL DEFAULT 0,
+  hidden     INTEGER NOT NULL DEFAULT 0,
+  region     TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, user_id)
+);
+-- Personas con acceso permitido (trust) o bloqueadas (block) en los canales de un dueño. Nunca las dos cosas.
+CREATE TABLE voice_access (
+  guild_id   TEXT NOT NULL,
+  owner_id   TEXT NOT NULL,
+  target_id  TEXT NOT NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('trust', 'block')),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, owner_id, target_id)
+);
+
+-- ── Moderación: casos numerados por servidor ──
+CREATE TABLE mod_cases (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id       TEXT NOT NULL,
+  case_number    INTEGER NOT NULL,
+  action         TEXT NOT NULL CHECK (action IN ('warn', 'timeout', 'untimeout', 'kick', 'ban', 'unban')),
+  target_id      TEXT NOT NULL,
+  moderator_id   TEXT NOT NULL,
+  reason         TEXT NOT NULL DEFAULT '',
+  duration_ms    INTEGER,
+  auto           INTEGER NOT NULL DEFAULT 0,
+  active         INTEGER NOT NULL DEFAULT 1,
+  created_at     INTEGER NOT NULL,
+  expires_at     INTEGER,
+  revoked_by     TEXT,
+  revoked_at     INTEGER,
+  log_channel_id TEXT,
+  log_message_id TEXT,
+  UNIQUE (guild_id, case_number)
+);
+CREATE INDEX ix_mod_cases_target ON mod_cases (guild_id, target_id, created_at);
+
+-- Roles con permisos del bot: mod = advertir, aislar e historial · admin = además expulsar, banear y editar casos.
+CREATE TABLE mod_roles (
+  guild_id TEXT NOT NULL,
+  role_id  TEXT NOT NULL,
+  level    TEXT NOT NULL CHECK (level IN ('mod', 'admin')),
+  PRIMARY KEY (guild_id, role_id)
+);
+
+-- Automod: configuración validada (JSON) y modo raid activo hasta raid_until.
+CREATE TABLE automod_config (
+  guild_id   TEXT PRIMARY KEY,
+  config     TEXT NOT NULL DEFAULT '{}',
+  raid_until INTEGER,
+  updated_at INTEGER NOT NULL
+);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

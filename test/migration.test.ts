@@ -32,7 +32,7 @@ describe('migración 2: datos de la pesca anterior', () => {
     db.run("INSERT INTO ledger (guild_id, user_id, delta, balance, reason, created_at) VALUES (?, ?, 300, 300, 'venta 10x papa', 0), (?, ?, -2500, 0, 'equipo herramienta t1', 0)", G, A, G, A);
     db.run("INSERT INTO role_rewards VALUES (?, '900000000000000001', 'pesca', 10)", G);
 
-    assert.deepEqual(runMigrations(db, 0), [2, 3, 4, 5, 6, 7, 8]);
+    assert.deepEqual(runMigrations(db, 0), [2, 3, 4, 5, 6, 7, 8, 9]);
     assert.deepEqual(runMigrations(db, 0), [], 'idempotente');
 
     const ctx = createContext({ db, baseConfig: structuredClone(DEFAULT_CONFIG), now: () => 1_750_000_000_000, rng: seeded(1) });
