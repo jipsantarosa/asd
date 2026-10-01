@@ -47,6 +47,7 @@ const RUN: Record<string, (c: CommandContext) => Promise<void>> = {
   async warn(c) {
     requireModerator(c.app, c.member, 'warn');
     const target = await needMember(c, `${c.prefix}warn @usuario motivo`);
+    await c.defer(); // MD, registro y posible escalado pueden tardar más de 3 s
     const r = await warnMember(actor(c), target, reasonOf(c, 1));
     await c.reply({ embeds: [resultEmbed('warn', target, r)] });
   },
@@ -54,12 +55,14 @@ const RUN: Record<string, (c: CommandContext) => Promise<void>> = {
     requireModerator(c.app, c.member, 'timeout');
     const target = await needMember(c, `${c.prefix}timeout @usuario 10m motivo`);
     const ms = parseDuration(c.str('duracion', 1));
+    await c.defer();
     const r = await timeoutMember(actor(c), target, ms, reasonOf(c, 2));
     await c.reply({ embeds: [resultEmbed('timeout', target, r)] });
   },
   async untimeout(c) {
     requireModerator(c.app, c.member, 'timeout');
     const target = await needMember(c, `${c.prefix}untimeout @usuario motivo`);
+    await c.defer();
     const r = await untimeoutMember(actor(c), target, reasonOf(c, 1));
     await c.reply({ embeds: [resultEmbed('untimeout', target, r)] });
   },
@@ -82,6 +85,7 @@ const RUN: Record<string, (c: CommandContext) => Promise<void>> = {
   async unban(c) {
     requireModerator(c.app, c.member, 'ban');
     const user = await anyUser(c, c.str('usuario', 0), `${c.prefix}unban ID motivo`);
+    await c.defer();
     const r = await unbanUser(actor(c), user, reasonOf(c, 1));
     await c.reply({ embeds: [resultEmbed('unban', user, r)] });
   },

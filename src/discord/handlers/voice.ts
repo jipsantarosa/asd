@@ -121,7 +121,7 @@ function summary(done: string, list: string[], skipped: string[]): string {
 async function changeOwner(app: App, t: Target, newOwner: GuildMember, why: 'reclamó' | 'recibió'): Promise<void> {
   const ch = t.channel;
   setTempOwner(app.ctx, ch.id, t.temp.ownerId, newOwner.id);
-  await withTimeout(ch.permissionOverwrites.edit(newOwner.id, ownerOptions(ch.guild, t.parent), { reason: `Nuevo dueño del canal temporal (${why})` }));
+  await withTimeout(ch.permissionOverwrites.edit(newOwner.id, ownerOptions(ch.guild, t.parent), { type: OverwriteType.Member, reason: `Nuevo dueño del canal temporal (${why})` }));
   await ch.permissionOverwrites.delete(t.temp.ownerId, 'Ya no es dueño del canal temporal').catch(() => undefined);
   await ch.send({ content: `👑 <@${newOwner.id}> ahora maneja este canal.`, allowedMentions: { parse: [] } }).catch(() => undefined);
   await sendLog(app.ctx, ch.guild, 'voz', { embeds: [new EmbedBuilder().setColor(COLORS.log).setTimestamp()
@@ -141,6 +141,8 @@ export const voiceHandler: Handler = async (app, i, id) => {
   const guild = i.guild;
   const next = (act: string) => cid('vc', act, i.user.id, ch.id);
   const reason = `Canal temporal: ${i.user.username}`;
+  // Tipo explícito: así discord.js no exige que la persona esté en caché para editar su permiso.
+  const asMember = { type: OverwriteType.Member, reason };
   // Las preferencias se guardan solo cuando actúa el dueño (un moderador no cambia los ajustes de otra persona).
   const remember = t.isOwner;
 
@@ -207,7 +209,7 @@ export const voiceHandler: Handler = async (app, i, id) => {
       requireOwner(t);
       await deferPrivate(i);
       const locked = !privacyOf(ch).locked;
-      await withTimeout(ch.permissionOverwrites.edit(guild.id, { Connect: locked ? false : null }, { reason }));
+      await withTimeout(ch.permissionOverwrites.edit(guild.id, { Connect: locked ? false : null }, { type: OverwriteType.Role, reason }));
       if (remember) saveVoiceProfile(ctx, guild.id, t.temp.ownerId, { locked });
       await finishPrivate(i, locked
         ? '🔒 **Canal privado.** Solo entran quienes permitas con ✅ Permitir (los que ya están, siguen).'
@@ -221,10 +223,10 @@ export const voiceHandler: Handler = async (app, i, id) => {
       if (hidden) {
         // Quienes ya están adentro lo siguen viendo (si no, Discord los desconectaría).
         for (const m of humans(ch).slice(0, 25)) {
-          if (m.id !== t.temp.ownerId) await ch.permissionOverwrites.edit(m.id, accessOptions(guild, t.parent), { reason }).catch(() => undefined);
+          if (m.id !== t.temp.ownerId) await ch.permissionOverwrites.edit(m.id, accessOptions(guild, t.parent), asMember).catch(() => undefined);
         }
       }
-      await withTimeout(ch.permissionOverwrites.edit(guild.id, { ViewChannel: hidden ? false : null }, { reason }));
+      await withTimeout(ch.permissionOverwrites.edit(guild.id, { ViewChannel: hidden ? false : null }, { type: OverwriteType.Role, reason }));
       if (remember) saveVoiceProfile(ctx, guild.id, t.temp.ownerId, { hidden });
       await finishPrivate(i, hidden
         ? '👻 **Canal oculto.** Solo lo ven quienes permitas y quienes ya están adentro.'
@@ -269,7 +271,7 @@ export const voiceHandler: Handler = async (app, i, id) => {
       await deferPrivate(i);
       const allowed = remember ? setAccess(ctx, guild.id, t.temp.ownerId, ids, 'trust') : { changed: ids, skipped: [] };
       skipped.push(...allowed.skipped.map((s) => `<@${s.id}> (${s.reason})`));
-      for (const uid of allowed.changed) await ch.permissionOverwrites.edit(uid, accessOptions(guild, t.parent), { reason }).catch(() => undefined);
+      for (const uid of allowed.changed) await ch.permissionOverwrites.edit(uid, accessOptions(guild, t.parent), asMember).catch(() => undefined);
       await finishPrivate(i, summary('✅ Ahora pueden entrar:', allowed.changed, skipped));
       return;
     }
@@ -308,7 +310,7 @@ export const voiceHandler: Handler = async (app, i, id) => {
       };
       const noDm: string[] = [];
       for (const uid of ids) {
-        await ch.permissionOverwrites.edit(uid, accessOptions(guild, t.parent), { reason }).catch(() => undefined);
+        await ch.permissionOverwrites.edit(uid, accessOptions(guild, t.parent), asMember).catch(() => undefined);
         const sent = await app.client.users.send(uid, dm).then(() => true).catch(() => false);
         if (!sent) noDm.push(`<@${uid}>`);
       }
@@ -363,7 +365,7 @@ export const voiceHandler: Handler = async (app, i, id) => {
       const res = remember ? setAccess(ctx, guild.id, t.temp.ownerId, allowedIds, 'block') : { changed: allowedIds, skipped: [] };
       skipped.push(...res.skipped.map((s) => `<@${s.id}> (${s.reason})`));
       for (const uid of res.changed) {
-        await ch.permissionOverwrites.edit(uid, { ViewChannel: false, Connect: false }, { reason }).catch(() => undefined);
+        await ch.permissionOverwrites.edit(uid, { ViewChannel: false, Connect: false }, asMember).catch(() => undefined);
         const m = guild.members.cache.get(uid);
         if (m?.voice.channelId === ch.id) await m.voice.disconnect(reason).catch(() => undefined);
       }

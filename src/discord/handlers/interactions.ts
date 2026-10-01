@@ -18,7 +18,14 @@ export async function respondError(i: Respondable, err: unknown, where: string):
     ? `⚠️ ${err.message}`
     : `❌ Ocurrió un error inesperado. Si se repite, pasale este código a un admin: \`${logger.incident(err, where)}\``;
   try {
-    if (i.deferred || i.replied) await i.followUp({ content, flags: MessageFlags.Ephemeral });
+    if (i.isChatInputCommand() && i.deferred && !i.replied) {
+      // Comando diferido ("pensando…"): si era privado se edita; si era público, se borra y el error va en privado.
+      if (i.ephemeral) await i.editReply({ content, embeds: [], components: [] });
+      else {
+        await i.deleteReply().catch(() => undefined);
+        await i.followUp({ content, flags: MessageFlags.Ephemeral });
+      }
+    } else if (i.deferred || i.replied) await i.followUp({ content, flags: MessageFlags.Ephemeral });
     else await i.reply({ content, flags: MessageFlags.Ephemeral });
   } catch {
     /* la interacción expiró: no hay nada que hacer */
