@@ -20,6 +20,7 @@ import { TOP_CATEGORIES, TOP_META, type TopCategory } from '../../services/leade
 import { Routes } from 'discord.js';
 import type { Command } from './types';
 import { canalCmd, vozCmd } from './voice';
+import { MODERATION_COMMANDS } from './moderation';
 import { avatares, banners, besosCmd, kissCmd, purgar } from './community';
 import { autoplayCmd, botProfileCmd, clearAvatarsCmd, clearNamesCmd, clearTagsCmd, ghostCmd, mstatsCmd, namesCmd, premiumCmd, tagsCmd } from './premium';
 
@@ -216,7 +217,7 @@ const eventos: Command = {
 
 export const COMMANDS: Command[] = [granja, pesca, mercado, inventario, perfil, top, jugar, ayuda, prefijo, ajustes, roles, eventos, setup, purgar, avatares, banners, kissCmd, besosCmd,
   premiumCmd, namesCmd, tagsCmd, clearAvatarsCmd, clearNamesCmd, clearTagsCmd, mstatsCmd, ghostCmd, botProfileCmd, autoplayCmd,
-  vozCmd, canalCmd];
+  vozCmd, canalCmd, ...MODERATION_COMMANDS];
 
 const byName = new Map<string, Command>();
 for (const cmd of COMMANDS) {

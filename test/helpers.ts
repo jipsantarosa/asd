@@ -6,6 +6,7 @@ import { validateConfig } from '../src/game/config';
 import type { GameConfig } from '../src/game/types';
 import { createContext, type GameContext } from '../src/services/context';
 import { resetLogCache } from '../src/services/logConfig';
+import { resetAutomodCache } from '../src/services/moderation';
 
 const require = createRequire(__filename);
 
@@ -70,6 +71,7 @@ export interface TestWorld {
 
 export function makeWorld(overrides: Partial<GameConfig> = {}, seed = 42): TestWorld {
   resetLogCache();
+  resetAutomodCache();
   const db = memoryDb();
   runMigrations(db, 0);
   const cfg = { ...structuredClone(DEFAULT_CONFIG), ...overrides };

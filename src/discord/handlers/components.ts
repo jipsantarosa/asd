@@ -47,6 +47,7 @@ import { joinEvent, setEventChannel, setEventsEnabled, getEventConfig } from '..
 import { TOP_CATEGORIES, type TopCategory } from '../../services/leaderboard';
 import { deferPanel, field, update, values, type Handler as UiHandler, type Ix } from './util';
 import { voiceAdminHandler, voiceHandler } from './voice';
+import { automodHandler, modHandler } from './moderation';
 
 export type { Ix } from './util';
 type Handler = UiHandler;
@@ -705,6 +706,8 @@ const premiumHandler: Handler = async (app, i, id) => {
 };
 
 export const HANDLERS: Record<string, Handler> = {
+  md: modHandler,
+  am: automodHandler,
   vc: voiceHandler,
   va: voiceAdminHandler,
   pr: premiumHandler,

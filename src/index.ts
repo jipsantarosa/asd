@@ -14,6 +14,7 @@ import { autoRegisterCommands } from './discord/registerCommands';
 import { loadOwners } from './discord/owner';
 import { startAutoplayScheduler } from './discord/autoplay';
 import { startTempVoice } from './discord/voice/tempVoice';
+import { createAutomod } from './discord/moderation/automod';
 import { pruneEphemeral } from './services/limits';
 import type { App } from './discord/app';
 import { onInteraction } from './discord/handlers/interactions';
@@ -56,7 +57,19 @@ async function main(): Promise<void> {
     void autoRegisterCommands(env.token(), c.application?.id ?? env.clientId(), env.devGuildId, path.dirname(path.resolve(env.databasePath)));
   });
   client.on(Events.InteractionCreate, onInteraction(app));
-  client.on(Events.MessageCreate, onMessage(app));
+  // Automod primero: un mensaje que rompe una regla (spam, enlaces, flood) se borra y no se procesa como comando.
+  const automod = createAutomod(app);
+  const commands = onMessage(app);
+  client.on(Events.MessageCreate, async (msg) => {
+    try {
+      if (await automod.onMessage(msg)) return;
+    } catch (err) {
+      logger.warn('Automod:', err);
+    }
+    await commands(msg);
+  });
+  client.on(Events.MessageUpdate, (_old, msg) => void automod.onEdit(msg).catch((err) => logger.warn('Automod (edición):', err)));
+  client.on(Events.GuildMemberAdd, (member) => void automod.onMemberAdd(member).catch((err) => logger.warn('Automod (raid):', err)));
   // Historial de avatares y banners (!avs, !banners): solo lo que el bot ve desde ahora.
   startMediaTracking(app);
   registerLogEvents(client, ctx);
@@ -136,6 +149,7 @@ async function main(): Promise<void> {
       pruneBuffs(ctx);
       pruneEphemeral(ctx);
       app.limiter.sweep();
+      automod.sweep();
     } catch (err) {
       logger.error('Fallo en el mantenimiento:', err);
     }
