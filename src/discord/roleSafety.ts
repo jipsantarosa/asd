@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, type Guild, type GuildMember, type Role } from 'discord.js';
 import type { GameContext } from '../services/context';
-import { getProfile } from '../services/player';
+import { getCasinoUser, levelFromWagered } from '../casino/users';
 import { eligibleRewards, listRewards } from '../services/roles';
 import { logger } from '../logger';
 
@@ -38,20 +38,26 @@ export function roleProblem(guild: Guild, role: Role | undefined | null): string
   return null;
 }
 
+/** Nivel del casino de una persona (1 si todavía no jugó). */
+export function casinoLevel(ctx: GameContext, userId: string): number {
+  const u = getCasinoUser(ctx, userId);
+  return u ? levelFromWagered(u.totalWagered) : 1;
+}
+
 /**
- * Otorga las distinciones que el miembro ya ganó. Solo agrega, nunca quita
+ * Otorga las distinciones (roles por nivel del casino) que el miembro ya ganó. Solo agrega, nunca quita
  * (si un admin baja un requisito, nadie pierde un rol por sorpresa).
  */
 export async function syncRewardRoles(ctx: GameContext, member: GuildMember): Promise<string[]> {
-  const p = getProfile(ctx, member.guild.id, member.id);
-  if (!p) return [];
-  const eligible = eligibleRewards(listRewards(ctx, member.guild.id), p);
+  const rewards = listRewards(ctx, member.guild.id);
+  if (!rewards.length) return [];
+  const eligible = eligibleRewards(rewards, casinoLevel(ctx, member.id));
   const toAdd = eligible
     .map((r) => member.guild.roles.cache.get(r.role_id))
     .filter((role): role is Role => !!role && !member.roles.cache.has(role.id) && roleProblem(member.guild, role) === null);
   if (!toAdd.length) return [];
   try {
-    await member.roles.add(toAdd, 'Distinción por progreso en El Valle');
+    await member.roles.add(toAdd, 'Distinción por nivel del casino');
     return toAdd.map((r) => r.id);
   } catch (err) {
     logger.warn(`No pude asignar distinciones en ${member.guild.id}:`, err);

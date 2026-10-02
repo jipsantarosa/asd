@@ -1,3 +1,8 @@
+/** Límite de acciones por usuario (comandos, botones y menús): 8 cada 10 s; 5 choques en una hora = aviso al staff. */
+export const ANTISPAM = { actionsPerWindow: 8, windowSeconds: 10, flagThreshold: 5 } as const;
+/** Botones de los juegos del casino: 20 cada 10 s (más que eso es un autoclicker). */
+export const ANTISPAM_GAMES = { actionsPerWindow: 20, windowSeconds: 10, flagThreshold: 5 } as const;
+
 /**
  * Limitador en memoria por usuario (ventana deslizante). No necesita persistir:
  * tras un reinicio el límite simplemente vuelve a empezar.

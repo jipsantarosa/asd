@@ -11,7 +11,6 @@ import { fetchAndRecord, serverTag } from '../tracking/userMedia';
 import { cid } from '../ui/ids';
 import { namesEmbed, tagsEmbed } from '../ui/namesPanel';
 import type { Command, CommandContext } from './types';
-import { AUTOPLAY_INTERVAL_MS, getAutoplay, setAutoplay } from '../../services/autoplay';
 
 const ACCENT = 0xe0418a;
 const VIEW_LABEL = { avatar: '🖼️ avatares', banner: '🎏 banners', names: '🪪 nombres', tags: '🏷️ tags' } as const;
@@ -293,35 +292,5 @@ export const botProfileCmd: Command = {
     if (what === 'reset') ctx.db.run('DELETE FROM bot_profile_slots WHERE user_id = ? AND guild_id = ?', c.member.id, c.guild.id);
     else ctx.db.run('INSERT OR IGNORE INTO bot_profile_slots (user_id, guild_id, claimed_at) VALUES (?, ?, ?)', c.member.id, c.guild.id, ctx.now());
     await c.reply({ content: what === 'reset' ? '♻️ Restablecí el perfil del bot en este servidor y liberé el lugar.' : `✅ Listo: cambié el ${what === 'nombre' || what === 'name' ? 'apodo' : what} del bot en este servidor.` }, { ephemeral: true });
-  },
-};
-
-// ───────────────────────── !autoplay (Tier 2) ─────────────────────────
-
-export const autoplayCmd: Command = {
-  name: 'autoplay',
-  aliases: ['auto', 'autojugar'],
-  prefix: true,
-  data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('autoplay').setDescription('El bot pesca y farmea por vos cada 10 minutos en este servidor (Premium Tier 2).')
-    .addBooleanOption((o) => o.setName('activo').setDescription('Activar o desactivar (vacío = ver el estado)')),
-  async run(c) {
-    const ctx = c.app.ctx;
-    const raw = c.interaction ? c.interaction.options.getBoolean('activo') : c.args[0]
-      ? ['on', 'si', 'sí', 'activar', '1'].includes(c.args[0].toLowerCase()) ? true : ['off', 'no', 'desactivar', '0'].includes(c.args[0].toLowerCase()) ? false : null
-      : null;
-    if (raw !== null) setAutoplay(ctx, c.guild.id, c.member.id, raw);
-    const a = getAutoplay(ctx, c.guild.id, c.member.id);
-    const on = !!a?.enabled;
-    const e = new EmbedBuilder().setColor(on ? 0x57f287 : ACCENT)
-      .setAuthor({ name: `Autoplay de ${c.member.displayName}`, iconURL: c.member.displayAvatarURL({ size: 64 }) })
-      .setDescription([
-        on ? `🤖 **Activado** · cada ${AUTOPLAY_INTERVAL_MS / 60_000} min cosecha y pesca una vez por vos en este servidor.` : '⏸️ **Desactivado.**',
-        on ? `Próximo turno <t:${Math.floor(a!.next_at / 1000)}:R>.` : '',
-        a ? `\nDesde <t:${Math.floor(a.started_at / 1000)}:R>: **${a.runs}** turnos · 🌾 ${a.harvests} cosechas · 🎣 ${a.catches} peces` : '',
-        a?.last_note ? `-# Último turno: ${a.last_note}` : '',
-        '',
-        `-# Usa tu vigor y tu carnada como si jugaras vos: si te quedás sin carnada, solo cosecha. \`${c.prefix}autoplay on\` / \`${c.prefix}autoplay off\``,
-      ].filter(Boolean).join('\n'));
-    await c.reply({ embeds: [e] }, { ephemeral: true });
   },
 };

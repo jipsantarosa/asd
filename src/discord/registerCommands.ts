@@ -3,11 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { REST, Routes } from 'discord.js';
 import { logger } from '../logger';
-import { COMMANDS } from './commands';
+import { COMMANDS, CONTEXT_MENUS } from './commands';
 
 /** JSON de los comandos de barra tal como se mandan a Discord. */
 export function commandsBody(): unknown[] {
-  return COMMANDS.filter((c) => c.data).map((c) => c.data!.toJSON());
+  return [...COMMANDS.filter((c) => c.data).map((c) => c.data!.toJSON()), ...CONTEXT_MENUS.map((m) => m.data.toJSON())];
 }
 
 /** Huella de los comandos: si cambia (comando nuevo, opción nueva…), hay que volver a registrarlos. */

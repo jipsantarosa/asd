@@ -2,28 +2,24 @@
   "name": "valle-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Bot de Discord con granja, pesca, mercado, roles y registros configurables.",
+  "description": "Bot de Discord con casino virtual (moneda solo del bot, sin dinero real), torneos, moderación, voz temporal y roles.",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-activity.mjs",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "deploy": "node dist/deploy-commands.js",
     "deploy:dev": "tsx src/deploy-commands.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test \"test/**/*.test.ts\"",
-    "build:activity": "node scripts/build-activity.mjs",
-    "balance": "tsx scripts/balance-report.ts"
+    "test": "tsx --test \"test/**/*.test.ts\""
   },
   "dependencies": {
-    "@discord/embedded-app-sdk": "^2.1.0",
-    "discord.js": "^14.16.3",
+    "discord.js": "^14.19.0",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
-    "esbuild": "^0.25.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },

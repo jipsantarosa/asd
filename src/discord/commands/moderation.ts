@@ -92,7 +92,7 @@ const RUN: Record<string, (c: CommandContext) => Promise<void>> = {
   async historial(c) {
     requireModerator(c.app, c.member, 'history');
     const user = await c.user_('usuario', 0);
-    if (!user) throw new GameError(`Uso: \`${c.prefix}historial @usuario\` (mención o ID).`);
+    if (!user) throw new GameError(`Uso: \`${c.prefix}modlogs @usuario\` (mención o ID).`);
     const member = await c.guild.members.fetch(user.id).catch(() => null);
     await c.reply(historyPanel(c.app.ctx, c.guild.id, c.member.id, {
       id: user.id, name: member?.displayName ?? user.username, avatar: user.displayAvatarURL({ size: 64 }),
@@ -158,7 +158,7 @@ export const untimeoutCommand = prefixOnly('untimeout', ['unmute', 'desaislar'],
 export const kickCommand = prefixOnly('kick', ['expulsar'], RUN.kick);
 export const banCommand = prefixOnly('ban', ['banear'], RUN.ban);
 export const unbanCommand = prefixOnly('unban', ['desbanear'], RUN.unban);
-export const historialCommand = prefixOnly('historial', ['history', 'modlogs', 'sanciones'], RUN.historial);
+export const historialCommand = prefixOnly('modlogs', ['sanciones', 'infracciones', 'casos'], RUN.historial);
 export const casoCommand = prefixOnly('caso', ['case'], RUN.caso);
 
 // ───────────────────────── /automod ─────────────────────────

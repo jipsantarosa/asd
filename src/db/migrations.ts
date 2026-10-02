@@ -635,6 +635,298 @@ CREATE TABLE automod_config (
 );
 `,
   },
+  {
+    id: 10,
+    name: 'casino',
+    sql: `
+-- ══════════════════════════ EL VALLE CASINO ══════════════════════════
+-- Economía global (una billetera por persona en todos los servidores). Las tablas de la granja
+-- y la pesca quedan intactas: no se usan más, pero no se borra ningún dato.
+
+-- ── Jugadores: estadísticas acumuladas, bonos y progreso ──
+CREATE TABLE casino_users (
+  user_id                 TEXT PRIMARY KEY,
+  total_wagered           INTEGER NOT NULL DEFAULT 0 CHECK (total_wagered >= 0),
+  total_payout            INTEGER NOT NULL DEFAULT 0 CHECK (total_payout >= 0),
+  total_won               INTEGER NOT NULL DEFAULT 0 CHECK (total_won >= 0),
+  total_lost              INTEGER NOT NULL DEFAULT 0 CHECK (total_lost >= 0),
+  net_profit              INTEGER NOT NULL DEFAULT 0,
+  rounds                  INTEGER NOT NULL DEFAULT 0,
+  wins                    INTEGER NOT NULL DEFAULT 0,
+  losses                  INTEGER NOT NULL DEFAULT 0,
+  pushes                  INTEGER NOT NULL DEFAULT 0,
+  biggest_bet             INTEGER NOT NULL DEFAULT 0,
+  biggest_payout          INTEGER NOT NULL DEFAULT 0,
+  biggest_multiplier      REAL    NOT NULL DEFAULT 0,
+  current_streak          INTEGER NOT NULL DEFAULT 0,
+  best_streak             INTEGER NOT NULL DEFAULT 0,
+  tournaments_played      INTEGER NOT NULL DEFAULT 0,
+  tournaments_won         INTEGER NOT NULL DEFAULT 0,
+  bonus_total             INTEGER NOT NULL DEFAULT 0,
+  level_rewarded          INTEGER NOT NULL DEFAULT 1,
+  daily_streak            INTEGER NOT NULL DEFAULT 0,
+  last_daily_at           INTEGER,
+  last_weekly_at          INTEGER,
+  last_rescue_at          INTEGER,
+  activity_streak         INTEGER NOT NULL DEFAULT 0,
+  last_activity_day       TEXT,
+  last_activity_reward_at INTEGER,
+  flags                   INTEGER NOT NULL DEFAULT 0,
+  created_at              INTEGER NOT NULL,
+  last_active_at          INTEGER NOT NULL,
+  updated_at              INTEGER NOT NULL
+);
+CREATE INDEX ix_casino_users_won     ON casino_users (total_won DESC);
+CREATE INDEX ix_casino_users_wagered ON casino_users (total_wagered DESC);
+CREATE INDEX ix_casino_users_payout  ON casino_users (biggest_payout DESC);
+CREATE INDEX ix_casino_users_mult    ON casino_users (biggest_multiplier DESC);
+CREATE INDEX ix_casino_users_tour    ON casino_users (tournaments_won DESC);
+CREATE INDEX ix_casino_users_rounds  ON casino_users (rounds DESC);
+CREATE INDEX ix_casino_users_profit  ON casino_users (net_profit DESC);
+
+-- ── Billeteras (currency permite sumar otras monedas virtuales en el futuro) ──
+CREATE TABLE casino_wallets (
+  user_id    TEXT NOT NULL REFERENCES casino_users(user_id),
+  currency   TEXT NOT NULL DEFAULT 'coins',
+  balance    INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, currency)
+);
+CREATE INDEX ix_casino_wallets_rich ON casino_wallets (currency, balance DESC);
+
+-- ── Transacciones: todo cambio de saldo, con saldo anterior y nuevo (la base verifica la cuenta) ──
+CREATE TABLE casino_transactions (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  tx_id           TEXT NOT NULL UNIQUE,
+  user_id         TEXT NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'coins',
+  amount          INTEGER NOT NULL,
+  balance_before  INTEGER NOT NULL CHECK (balance_before >= 0),
+  balance_after   INTEGER NOT NULL CHECK (balance_after >= 0),
+  type            TEXT NOT NULL CHECK (type IN ('STARTER','BET','WIN','LOSS','PUSH','REFUND','BONUS','ACTIVITY','LEVEL_REWARD',
+                    'ACHIEVEMENT_REWARD','TOURNAMENT_REWARD','TOURNAMENT_ENTRY','JACKPOT','DROP','ADMIN_ADJUSTMENT')),
+  game            TEXT,
+  round_id        INTEGER,
+  guild_id        TEXT,
+  idempotency_key TEXT UNIQUE,
+  metadata        TEXT,
+  created_at      INTEGER NOT NULL,
+  CHECK (balance_after = balance_before + amount)
+);
+CREATE INDEX ix_casino_tx_user  ON casino_transactions (user_id, id DESC);
+CREATE INDEX ix_casino_tx_round ON casino_transactions (round_id) WHERE round_id IS NOT NULL;
+
+-- ── Provably fair: semilla del servidor (secreta hasta rotarla), semilla del cliente y nonce ──
+CREATE TABLE casino_seeds (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id          TEXT NOT NULL,
+  server_seed      TEXT NOT NULL,
+  server_seed_hash TEXT NOT NULL UNIQUE,
+  client_seed      TEXT NOT NULL,
+  nonce            INTEGER NOT NULL DEFAULT 0 CHECK (nonce >= 0),
+  active           INTEGER NOT NULL DEFAULT 1,
+  created_at       INTEGER NOT NULL,
+  revealed_at      INTEGER
+);
+CREATE UNIQUE INDEX ux_casino_seeds_active ON casino_seeds (user_id) WHERE active = 1;
+CREATE INDEX ix_casino_seeds_user ON casino_seeds (user_id, id DESC);
+
+-- ── Rondas: activa = sesión de juego; liquidada = historial ──
+CREATE TABLE casino_rounds (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     TEXT NOT NULL REFERENCES casino_users(user_id),
+  guild_id    TEXT,
+  channel_id  TEXT,
+  message_id  TEXT,
+  game        TEXT NOT NULL,
+  bet         INTEGER NOT NULL CHECK (bet > 0),
+  total_bet   INTEGER NOT NULL CHECK (total_bet >= bet),
+  payout      INTEGER NOT NULL DEFAULT 0 CHECK (payout >= 0),
+  multiplier  REAL NOT NULL DEFAULT 0,
+  -- RTP con el que empezó la ronda: un cambio de configuración no afecta partidas en curso, y la verificación lo usa.
+  rtp         REAL NOT NULL CHECK (rtp > 0 AND rtp <= 1),
+  status      TEXT NOT NULL CHECK (status IN ('active', 'won', 'lost', 'push', 'refunded')),
+  params      TEXT NOT NULL DEFAULT '{}',
+  state       TEXT,
+  result      TEXT,
+  summary     TEXT,
+  version     INTEGER NOT NULL DEFAULT 0,
+  seed_id     INTEGER NOT NULL REFERENCES casino_seeds(id),
+  nonce       INTEGER NOT NULL,
+  rebet_used  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  settled_at  INTEGER
+);
+-- Una partida abierta por juego y persona (la base lo garantiza aunque lleguen dos comandos a la vez).
+CREATE UNIQUE INDEX ux_casino_rounds_active ON casino_rounds (user_id, game) WHERE status = 'active';
+-- Un nonce nunca se usa dos veces con la misma semilla.
+CREATE UNIQUE INDEX ux_casino_rounds_nonce ON casino_rounds (seed_id, nonce);
+CREATE INDEX ix_casino_rounds_user ON casino_rounds (user_id, id DESC);
+CREATE INDEX ix_casino_rounds_game ON casino_rounds (game, id DESC);
+CREATE INDEX ix_casino_rounds_open ON casino_rounds (updated_at) WHERE status = 'active';
+
+-- ── Estadísticas por juego ──
+CREATE TABLE casino_game_stats (
+  user_id            TEXT NOT NULL,
+  game               TEXT NOT NULL,
+  rounds             INTEGER NOT NULL DEFAULT 0,
+  wins               INTEGER NOT NULL DEFAULT 0,
+  losses             INTEGER NOT NULL DEFAULT 0,
+  pushes             INTEGER NOT NULL DEFAULT 0,
+  wagered            INTEGER NOT NULL DEFAULT 0,
+  payout             INTEGER NOT NULL DEFAULT 0,
+  won                INTEGER NOT NULL DEFAULT 0,
+  lost               INTEGER NOT NULL DEFAULT 0,
+  biggest_payout     INTEGER NOT NULL DEFAULT 0,
+  biggest_multiplier REAL NOT NULL DEFAULT 0,
+  biggest_bet        INTEGER NOT NULL DEFAULT 0,
+  last_played_at     INTEGER,
+  PRIMARY KEY (user_id, game)
+);
+
+-- ── Logros (el catálogo vive en el código) ──
+CREATE TABLE casino_achievements (
+  user_id        TEXT NOT NULL,
+  achievement_id TEXT NOT NULL,
+  reward         INTEGER NOT NULL DEFAULT 0,
+  unlocked_at    INTEGER NOT NULL,
+  PRIMARY KEY (user_id, achievement_id)
+);
+
+-- ── Torneos ──
+CREATE TABLE casino_tournaments (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',
+  kind         TEXT NOT NULL CHECK (kind IN ('daily', 'weekly', 'special')),
+  metric       TEXT NOT NULL CHECK (metric IN ('profit', 'wagered', 'multiplier', 'wins')),
+  game         TEXT,
+  min_bet      INTEGER NOT NULL DEFAULT 0 CHECK (min_bet >= 0),
+  max_bet      INTEGER CHECK (max_bet IS NULL OR max_bet > 0),
+  entry_fee    INTEGER NOT NULL DEFAULT 0 CHECK (entry_fee >= 0),
+  fees_to_pool INTEGER NOT NULL DEFAULT 1,
+  prizes       TEXT NOT NULL DEFAULT '[]',
+  min_rounds   INTEGER NOT NULL DEFAULT 0 CHECK (min_rounds >= 0),
+  status       TEXT NOT NULL CHECK (status IN ('draft', 'scheduled', 'active', 'finished', 'cancelled')),
+  starts_at    INTEGER NOT NULL,
+  ends_at      INTEGER NOT NULL,
+  auto_key     TEXT UNIQUE,
+  created_by   TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  finished_at  INTEGER,
+  CHECK (ends_at > starts_at)
+);
+CREATE INDEX ix_casino_tour_status ON casino_tournaments (status, ends_at);
+CREATE TABLE casino_tournament_entries (
+  tournament_id   INTEGER NOT NULL REFERENCES casino_tournaments(id) ON DELETE CASCADE,
+  user_id         TEXT NOT NULL,
+  score           REAL NOT NULL DEFAULT 0,
+  rounds          INTEGER NOT NULL DEFAULT 0,
+  wins            INTEGER NOT NULL DEFAULT 0,
+  wagered         INTEGER NOT NULL DEFAULT 0,
+  profit          INTEGER NOT NULL DEFAULT 0,
+  best_multiplier REAL NOT NULL DEFAULT 0,
+  fee_paid        INTEGER NOT NULL DEFAULT 0,
+  final_rank      INTEGER,
+  prize           INTEGER NOT NULL DEFAULT 0,
+  joined_at       INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  PRIMARY KEY (tournament_id, user_id)
+);
+CREATE INDEX ix_casino_tour_score ON casino_tournament_entries (tournament_id, score DESC, updated_at);
+
+-- ── Actividad por día (recompensas por mensajes) ──
+CREATE TABLE casino_activity (
+  user_id  TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  messages INTEGER NOT NULL DEFAULT 0,
+  coins    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, day)
+);
+
+-- ── Configuración global del casino (JSON validado), pozos y datos internos ──
+CREATE TABLE casino_config (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE casino_pools (
+  pool       TEXT PRIMARY KEY,
+  amount     INTEGER NOT NULL CHECK (amount >= 0),
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE casino_meta (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- ── En qué servidores jugó cada persona (para el top del servidor) ──
+CREATE TABLE casino_user_guilds (
+  user_id   TEXT NOT NULL,
+  guild_id  TEXT NOT NULL,
+  last_seen INTEGER NOT NULL,
+  PRIMARY KEY (user_id, guild_id)
+);
+CREATE INDEX ix_casino_user_guilds ON casino_user_guilds (guild_id, user_id);
+
+-- ── Ajustes del casino en cada servidor (los configura el staff del servidor) ──
+CREATE TABLE casino_guild_settings (
+  guild_id            TEXT PRIMARY KEY,
+  announce_channel_id TEXT,
+  game_channels       TEXT NOT NULL DEFAULT '[]',
+  activity_enabled    INTEGER NOT NULL DEFAULT 1,
+  updated_at          INTEGER NOT NULL
+);
+
+-- ── Distinciones por nivel del casino (reemplazan a las de granja/pesca) ──
+CREATE TABLE casino_role_rewards (
+  guild_id TEXT NOT NULL,
+  role_id  TEXT NOT NULL,
+  level    INTEGER NOT NULL CHECK (level >= 1),
+  PRIMARY KEY (guild_id, role_id)
+);
+
+-- ── Eventos: lluvia de monedas ──
+CREATE TABLE casino_drops (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id         TEXT NOT NULL,
+  channel_id       TEXT NOT NULL,
+  message_id       TEXT,
+  amount_each      INTEGER NOT NULL CHECK (amount_each > 0),
+  max_claims       INTEGER NOT NULL CHECK (max_claims > 0),
+  claims           INTEGER NOT NULL DEFAULT 0,
+  min_account_days INTEGER NOT NULL DEFAULT 7,
+  status           TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  created_by       TEXT NOT NULL,
+  created_at       INTEGER NOT NULL,
+  expires_at       INTEGER NOT NULL,
+  CHECK (claims <= max_claims)
+);
+CREATE TABLE casino_drop_claims (
+  drop_id    INTEGER NOT NULL REFERENCES casino_drops(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  amount     INTEGER NOT NULL,
+  claimed_at INTEGER NOT NULL,
+  PRIMARY KEY (drop_id, user_id)
+);
+
+-- ── Registro de acciones administrativas ──
+CREATE TABLE casino_admin_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor_id   TEXT NOT NULL,
+  action     TEXT NOT NULL,
+  target_id  TEXT,
+  details    TEXT,
+  guild_id   TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX ix_casino_admin_log ON casino_admin_log (created_at DESC);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

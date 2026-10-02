@@ -1,9 +1,7 @@
 import { createRequire } from 'node:module';
 import { runMigrations } from '../src/db/migrations';
 import type { Db, RunResult } from '../src/db/types';
-import { DEFAULT_CONFIG } from '../src/game/defaults';
-import { validateConfig } from '../src/game/config';
-import type { GameConfig } from '../src/game/types';
+import '../src/casino/games';
 import { createContext, type GameContext } from '../src/services/context';
 import { resetLogCache } from '../src/services/logConfig';
 import { resetAutomodCache } from '../src/services/moderation';
@@ -69,15 +67,14 @@ export interface TestWorld {
   clock: { t: number; advance(ms: number): void };
 }
 
-export function makeWorld(overrides: Partial<GameConfig> = {}, seed = 42): TestWorld {
+/** Base nueva con todas las migraciones y un reloj controlable (el azar de los juegos sale de las semillas). */
+export function makeWorld(): TestWorld {
   resetLogCache();
   resetAutomodCache();
   const db = memoryDb();
   runMigrations(db, 0);
-  const cfg = { ...structuredClone(DEFAULT_CONFIG), ...overrides };
-  validateConfig(cfg);
   const clock = { t: 1_750_000_000_000, advance(ms: number) { this.t += ms; } };
-  const ctx = createContext({ db, baseConfig: cfg, now: () => clock.t, rng: seeded(seed) });
+  const ctx = createContext({ db, now: () => clock.t });
   return { ctx, clock };
 }
 

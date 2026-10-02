@@ -1,16 +1,19 @@
-import { MessageFlags, type ChatInputCommandInteraction, type Interaction, type MessageComponentInteraction, type ModalSubmitInteraction } from 'discord.js';
+import {
+  MessageFlags, type ChatInputCommandInteraction, type Interaction, type MessageComponentInteraction, type MessageContextMenuCommandInteraction, type ModalSubmitInteraction,
+} from 'discord.js';
 import { logger } from '../../logger';
 import { GameError } from '../../services/context';
-import { gameConfig, getSettings } from '../../services/guildSettings';
+import { getSettings } from '../../services/guildSettings';
+import { ANTISPAM, ANTISPAM_GAMES } from '../../services/antispam';
 import { viewerOf, type App } from '../app';
-import { findCommand } from '../commands';
+import { CONTEXT_MENUS, findCommand } from '../commands';
 import { buildContext } from '../commands/types';
 import { logSystem } from '../logging/sender';
 import { parseId } from '../ui/ids';
 import { COLORS } from '../ui/theme';
 import { HANDLERS, type Ix } from './components';
 
-type Respondable = Ix | ChatInputCommandInteraction | MessageComponentInteraction | ModalSubmitInteraction;
+type Respondable = Ix | ChatInputCommandInteraction | MessageComponentInteraction | ModalSubmitInteraction | MessageContextMenuCommandInteraction;
 
 /** Responde un error sin romper si la interacción ya fue respondida o expiró. */
 export async function respondError(i: Respondable, err: unknown, where: string): Promise<void> {
@@ -18,7 +21,7 @@ export async function respondError(i: Respondable, err: unknown, where: string):
     ? `⚠️ ${err.message}`
     : `❌ Ocurrió un error inesperado. Si se repite, pasale este código a un admin: \`${logger.incident(err, where)}\``;
   try {
-    if (i.isChatInputCommand() && i.deferred && !i.replied) {
+    if ((i.isChatInputCommand() || i.isMessageContextMenuCommand()) && i.deferred && !i.replied) {
       // Comando diferido ("pensando…"): si era privado se edita; si era público, se borra y el error va en privado.
       if (i.ephemeral) await i.editReply({ content, embeds: [], components: [] });
       else {
@@ -36,10 +39,11 @@ export async function respondError(i: Respondable, err: unknown, where: string):
  * Antispam común a botones, menús, modales y comandos.
  * Devuelve false si hay que ignorar la acción (y ya respondió al usuario).
  */
-async function passRateLimit(app: App, i: Respondable): Promise<boolean> {
+async function passRateLimit(app: App, i: Respondable, game = false): Promise<boolean> {
   if (!i.inCachedGuild()) return true;
-  const a = gameConfig(app.ctx, i.guildId).tuning.antispam;
-  const r = app.limiter.check(`${i.guildId}:${i.user.id}`, a.actionsPerWindow, a.windowSeconds * 1000, a.flagThreshold);
+  // Los botones de los juegos tienen su propio cupo, más amplio (destapar minas rápido es jugar, no spamear).
+  const a = game ? ANTISPAM_GAMES : ANTISPAM;
+  const r = app.limiter.check(`${game ? 'game:' : ''}${i.guildId}:${i.user.id}`, a.actionsPerWindow, a.windowSeconds * 1000, a.flagThreshold);
   if (r === 'ok') return true;
   if (r === 'flag') {
     await logSystem(app.ctx, i.guild, `🚨 Actividad sospechosa: <@${i.user.id}> superó el límite de acciones ${a.flagThreshold} veces en la última hora (posible autoclicker o script).`, COLORS.warn);
@@ -64,6 +68,18 @@ async function handleSlash(app: App, i: ChatInputCommandInteraction): Promise<vo
   if (!res.ran) throw new GameError('Estoy procesando tu acción anterior, esperá un segundo.');
 }
 
+async function handleContextMenu(app: App, i: MessageContextMenuCommandInteraction): Promise<void> {
+  const menu = CONTEXT_MENUS.find((m) => m.data.name === i.commandName);
+  if (!menu) return;
+  if (!i.inCachedGuild()) {
+    await i.reply({ content: 'Esto solo funciona dentro de servidores.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (!(await passRateLimit(app, i))) return;
+  const res = await app.userLock.run(`${i.guildId}:${i.user.id}`, () => menu.run(app, i));
+  if (!res.ran) throw new GameError('Estoy procesando tu acción anterior, esperá un segundo.');
+}
+
 async function handleComponent(app: App, i: MessageComponentInteraction | ModalSubmitInteraction): Promise<void> {
   const id = parseId(i.customId);
   if (!id) return; // no es de este bot
@@ -73,7 +89,7 @@ async function handleComponent(app: App, i: MessageComponentInteraction | ModalS
   }
   // Un panel solo lo maneja quien lo abrió ("0" = panel público).
   if (id.owner !== '0' && id.owner !== i.user.id) {
-    await i.reply({ content: '🔒 Este panel es de otra persona. Abrí el tuyo con `/granja`, `/pesca` o `/mercado`.', flags: MessageFlags.Ephemeral });
+    await i.reply({ content: '🔒 Esto es de otra persona. Abrí el tuyo con el mismo comando.', flags: MessageFlags.Ephemeral });
     return;
   }
   const handler = HANDLERS[id.mod];
@@ -81,13 +97,7 @@ async function handleComponent(app: App, i: MessageComponentInteraction | ModalS
     await i.reply({ content: 'Este botón ya no es válido. Abrí el panel de nuevo.', flags: MessageFlags.Ephemeral });
     return;
   }
-  // La pesca no tiene freno anti spam: se puede tocar sin límite. Cada tiro es una transacción
-  // sincrónica de SQLite, así que aunque lleguen muchos clics seguidos el inventario y el saldo quedan exactos.
-  if (id.mod === 'fi') {
-    await handler(app, i, id);
-    return;
-  }
-  if (!(await passRateLimit(app, i))) return;
+  if (!(await passRateLimit(app, i, id.mod === 'cs'))) return;
   const res = await app.userLock.run(`${i.guildId}:${i.user.id}`, () => handler(app, i, id));
   if (!res.ran) {
     await i.reply({ content: '⏳ Estoy procesando tu acción anterior, esperá un segundo.', flags: MessageFlags.Ephemeral }).catch(() => undefined);
@@ -98,10 +108,11 @@ export function onInteraction(app: App) {
   return async (i: Interaction): Promise<void> => {
     try {
       if (i.isChatInputCommand()) await handleSlash(app, i);
+      else if (i.isMessageContextMenuCommand()) await handleContextMenu(app, i);
       else if (i.isMessageComponent() || i.isModalSubmit()) await handleComponent(app, i);
     } catch (err) {
-      if (i.isChatInputCommand() || i.isMessageComponent() || i.isModalSubmit()) {
-        await respondError(i as Respondable, err, i.isChatInputCommand() ? `/${i.commandName}` : i.customId);
+      if (i.isChatInputCommand() || i.isMessageContextMenuCommand() || i.isMessageComponent() || i.isModalSubmit()) {
+        await respondError(i as Respondable, err, i.isChatInputCommand() || i.isMessageContextMenuCommand() ? `/${i.commandName}` : i.customId);
       } else {
         logger.error('Interacción no manejada:', err);
       }

@@ -28,7 +28,7 @@ export function rolesAdminPanel(ctx: GameContext, guild: Guild, owner: string, v
     const groups = listGroups(ctx, guild.id);
     embed.setTitle('🎭 Grupos de roles')
       .setDescription(`${head}Creá **grupos** de roles que los miembros eligen desde un panel propio (con su selección actual ya marcada). ` +
-        'Cada grupo puede ser **libre** o **único** y exigir un nivel total mínimo del juego.\n\n' +
+        'Cada grupo puede ser **libre** o **único** y exigir un nivel mínimo del casino.\n\n' +
         (groups.length
           ? groups.map((g) => `**${clean(g.name)}** · ${MODE_TEXT[g.mode]} · ${g.roles.length} roles${g.min_total_level ? ` · nv. ${g.min_total_level}+` : ''}${g.channel_id ? ` · publicado en <#${g.channel_id}>` : ' · sin publicar'}`).join('\n')
           : '*Todavía no hay grupos.*'));
@@ -47,14 +47,14 @@ export function rolesAdminPanel(ctx: GameContext, guild: Guild, owner: string, v
   if (view.kind === 'rewards') {
     const rewards = listRewards(ctx, guild.id);
     embed.setTitle('🏅 Distinciones')
-      .setDescription(`${head}Roles que se otorgan **automáticamente** al alcanzar un nivel de granja, de pesca o total, o una cantidad de **puntos de actividad** (se ganan pescando, farmeando, comerciando y con logros). ` +
+      .setDescription(`${head}Roles que se otorgan **automáticamente** al alcanzar un **nivel del casino** (el nivel sube con el total apostado, no con lo ganado). ` +
         'Se entregan al subir de nivel y al abrir el perfil. Nunca se quitan solas.\n\n' +
-        (rewards.length ? rewards.map((r) => `${roleLine(guild, r.role_id)} — ${r.skill === 'actividad' ? `**${r.level.toLocaleString('es-AR')} pts de actividad**` : `**${r.skill}** nv. ${r.level}`}`).join('\n') : '*No hay distinciones configuradas.*'));
+        (rewards.length ? rewards.map((r) => `${roleLine(guild, r.role_id)} — **nivel ${r.level}**`).join('\n') : '*No hay distinciones configuradas.*'));
     rows.push(row(new RoleSelectMenuBuilder().setCustomId(cid('ra', 'rwadd', owner)).setPlaceholder('Agregar o editar una distinción…').setMinValues(1).setMaxValues(1)));
     if (rewards.length) {
       rows.push(row(new StringSelectMenuBuilder().setCustomId(cid('ra', 'rwdel', owner)).setPlaceholder('Quitar una distinción…')
         .addOptions(rewards.map((r) => new StringSelectMenuOptionBuilder().setValue(r.role_id)
-          .setLabel(truncate(guild.roles.cache.get(r.role_id)?.name ?? r.role_id, 100)).setDescription(r.skill === 'actividad' ? `${r.level} pts de actividad` : `${r.skill} nv. ${r.level}`)))));
+          .setLabel(truncate(guild.roles.cache.get(r.role_id)?.name ?? r.role_id, 100)).setDescription(`Nivel ${r.level}`)))));
     }
     rows.push(row(new ButtonBuilder().setCustomId(cid('ra', 'home', owner)).setLabel('Volver').setEmoji('↩️').setStyle(ButtonStyle.Secondary)));
     return { embeds: [embed], components: rows };
@@ -62,7 +62,7 @@ export function rolesAdminPanel(ctx: GameContext, guild: Guild, owner: string, v
 
   const g = getGroup(ctx, guild.id, view.id);
   embed.setTitle(`🎭 ${clean(g.name)}`)
-    .setDescription(`${head}${g.description ? `${clean(g.description)}\n\n` : ''}**Modo:** ${MODE_TEXT[g.mode]}\n**Nivel total mínimo:** ${g.min_total_level || 'ninguno'}\n` +
+    .setDescription(`${head}${g.description ? `${clean(g.description)}\n\n` : ''}**Modo:** ${MODE_TEXT[g.mode]}\n**Nivel mínimo del casino:** ${g.min_total_level || 'ninguno'}\n` +
       `**Publicado en:** ${g.channel_id ? `<#${g.channel_id}>` : 'todavía no'}\n\n**Roles (${g.roles.length}/25):**\n${g.roles.map((r) => roleLine(guild, r)).join('\n') || '*Agregá roles con el menú de abajo.*'}`)
     .setFooter({ text: 'Los roles con permisos de moderación, gestionados por bots o por encima del bot se rechazan automáticamente.' });
 
@@ -96,7 +96,7 @@ export function publicGroupMessage(guild: Guild, g: RoleGroup): Panel {
     .setColor(COLORS.roles)
     .setTitle(`🎭 ${clean(g.name)}`)
     .setDescription(`${g.description ? `${clean(g.description)}\n\n` : ''}${available.map((id) => `• <@&${id}>`).join('\n') || '*Sin roles disponibles.*'}`)
-    .setFooter({ text: `${g.mode === 'libre' ? 'Podés elegir varios.' : 'Solo podés tener uno.'}${g.min_total_level ? ` Requiere nivel total ${g.min_total_level} en El Valle.` : ''}` });
+    .setFooter({ text: `${g.mode === 'libre' ? 'Podés elegir varios.' : 'Solo podés tener uno.'}${g.min_total_level ? ` Requiere nivel ${g.min_total_level} del casino.` : ''}` });
   return {
     embeds: [embed],
     components: [row(new ButtonBuilder().setCustomId(cid('rp', 'open', '0', g.id)).setLabel('Elegir mis roles').setEmoji('🎭').setStyle(ButtonStyle.Primary))],

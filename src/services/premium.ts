@@ -8,13 +8,13 @@ export type PremiumTier = 1 | 2 | 3 | 4;
 
 export const TIERS: Record<PremiumTier, { name: string; emoji: string; perks: string[] }> = {
   1: { name: 'Booster', emoji: '💎', perks: ['!clearavatars', '!clearnames', '!tags'] },
-  2: { name: 'Tier 2', emoji: '🌟', perks: ['!cleartags', '!mstats (parcial)', '!autoplay'] },
+  2: { name: 'Tier 2', emoji: '🌟', perks: ['!cleartags', '!mstats (parcial)'] },
   3: { name: 'Tier 3', emoji: '👑', perks: ['!mstats completo (últimas 10 personas)'] },
   4: { name: 'Tier 4', emoji: '🔮', perks: ['!ghostmode', '!botperfil (perfil del bot en 3 servidores)'] },
 };
 
 export const FEATURE_TIER = {
-  clearavatars: 1, clearnames: 1, tags: 1, cleartags: 2, mstats: 2, autoplay: 2, mstatsFull: 3, ghostmode: 4, botprofile: 4,
+  clearavatars: 1, clearnames: 1, tags: 1, cleartags: 2, mstats: 2, mstatsFull: 3, ghostmode: 4, botprofile: 4,
 } as const satisfies Record<string, PremiumTier>;
 
 export interface PremiumRow {

@@ -1,17 +1,21 @@
 import { PermissionFlagsBits, type Message } from 'discord.js';
 import { logger } from '../../logger';
 import { GameError } from '../../services/context';
-import { gameConfig, getSettings } from '../../services/guildSettings';
+import { getSettings } from '../../services/guildSettings';
+import { ANTISPAM } from '../../services/antispam';
 import { viewerOf, type App } from '../app';
 import { findCommand } from '../commands';
 import { buildContext } from '../commands/types';
 import { logSystem } from '../logging/sender';
 import { COLORS } from '../ui/theme';
 
-/** Comandos de texto: prefijo propio de cada servidor (persistente) o mención al bot. */
+/**
+ * Comandos de texto: prefijo propio de cada servidor (persistente) o mención al bot.
+ * Devuelve true si el mensaje iba dirigido al bot (aunque el comando no exista): así no cuenta como actividad.
+ */
 export function onMessage(app: App) {
-  return async (msg: Message): Promise<void> => {
-    if (!msg.inGuild() || msg.author.bot || msg.webhookId || !app.client.user) return;
+  return async (msg: Message): Promise<boolean> => {
+    if (!msg.inGuild() || msg.author.bot || msg.webhookId || !app.client.user) return false;
     const prefix = getSettings(app.ctx, msg.guildId).prefix;
     const mention = new RegExp(`^<@!?${app.client.user.id}>\\s*`);
     const content = msg.content.trim();
@@ -19,7 +23,7 @@ export function onMessage(app: App) {
     let body: string | null = null;
     if (content.startsWith(prefix)) body = content.slice(prefix.length);
     else if (mention.test(content)) body = content.replace(mention, '');
-    if (body === null) return;
+    if (body === null) return false;
 
     const args = body.trim().split(/\s+/).filter(Boolean);
     const name = args.shift();
@@ -37,7 +41,7 @@ export function onMessage(app: App) {
     const missing = NEEDED.filter(([flag]) => !perms?.has(flag)).map(([, label]) => label);
     if (missing.length) {
       const wanted = name ? findCommand(name) : null;
-      if (name && (!wanted || !wanted.prefix)) return; // no era un comando nuestro
+      if (name && (!wanted || !wanted.prefix)) return true; // no era un comando nuestro
       const text = `⚠️ No puedo responder en <#${msg.channel.id}>: me falta el permiso **${missing.join('**, **')}**. Pedile a un admin que se lo dé a mi rol en ese canal.`;
       if (perms?.has(PermissionFlagsBits.SendMessages)) {
         await msg.channel.send({ content: text, allowedMentions: { parse: [] } }).catch(() => undefined);
@@ -45,27 +49,27 @@ export function onMessage(app: App) {
         logger.warn(`Sin permisos para responder en #${msg.channel.id} (${msg.guild.name}): ${missing.join(', ')}`);
         await msg.author.send({ content: `${text}\n-# Servidor: ${msg.guild.name}` }).catch(() => undefined);
       }
-      return;
+      return true;
     }
     if (!name) {
       // Solo mencionaron al bot: recordar el prefijo.
       await msg.reply({ content: `👋 Mi prefijo acá es \`${prefix}\`. Probá \`${prefix}ayuda\` o \`/ayuda\`.`, allowedMentions: { repliedUser: false } });
-      return;
+      return true;
     }
     const cmd = findCommand(name);
-    if (!cmd || !cmd.prefix) return;
+    if (!cmd || !cmd.prefix) return true;
 
     const member = msg.member ?? (await msg.guild.members.fetch(msg.author.id).catch(() => null));
-    if (!member) return;
+    if (!member) return true;
     const say = (text: string) => msg.reply({ content: text, allowedMentions: { parse: [], repliedUser: false } }).catch(() => undefined);
 
     try {
       if (cmd.permission && !member.permissions.has(cmd.permission)) throw new GameError(`Necesitás el permiso **${cmd.permissionName}** para usar este comando.`);
-      const a = gameConfig(app.ctx, msg.guildId).tuning.antispam;
+      const a = ANTISPAM;
       const rl = app.limiter.check(`${msg.guildId}:${msg.author.id}`, a.actionsPerWindow, a.windowSeconds * 1000, a.flagThreshold);
       if (rl !== 'ok') {
         if (rl === 'flag') await logSystem(app.ctx, msg.guild, `🚨 Actividad sospechosa: <@${msg.author.id}> superó el límite de comandos repetidamente.`, COLORS.warn);
-        return; // en texto se ignora en silencio para no sumar spam
+        return true; // en texto se ignora en silencio para no sumar spam
       }
       const c = buildContext({ app, member, viewer: viewerOf(member), prefix, message: msg, args });
       const res = await app.userLock.run(`${msg.guildId}:${msg.author.id}`, () => cmd.run(c));
@@ -74,5 +78,6 @@ export function onMessage(app: App) {
       if (err instanceof GameError) await say(`⚠️ ${err.message}`);
       else await say(`❌ Error inesperado (código \`${logger.incident(err, `${prefix}${name}`)}\`).`);
     }
+    return true;
   };
 }

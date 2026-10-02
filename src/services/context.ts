@@ -1,42 +1,33 @@
+import type { CasinoConfig } from '../casino/config';
 import type { Db } from '../db/types';
-import type { GameConfig } from '../game/types';
 
 /**
- * Contexto que reciben todos los servicios. Inyectar reloj y RNG permite
- * probar la lógica de forma determinista.
+ * Contexto que reciben todos los servicios. Inyectar el reloj permite probar la lógica de forma
+ * determinista. (El azar de los juegos NO sale de acá: sale de semillas verificables, ver casino/rng.ts.)
  */
 export interface GameContext {
   db: Db;
   now: () => number;
-  rng: () => number;
-  baseConfig: GameConfig;
   defaultPrefix: string;
   /** Cachés en memoria (se invalidan al escribir). */
   cache: {
     settings: Map<string, GuildSettingsCache>;
-    configs: Map<string, GameConfig>;
+    casino?: CasinoConfig;
+    /** Esperas entre rondas del casino: "usuario:juego" → ms en que se puede volver a jugar. */
+    cooldowns: Map<string, number>;
   };
 }
 
 export interface GuildSettingsCache {
   prefix: string;
-  tunables: Record<string, number>;
 }
 
-export function createContext(opts: {
-  db: Db;
-  baseConfig: GameConfig;
-  defaultPrefix?: string;
-  now?: () => number;
-  rng?: () => number;
-}): GameContext {
+export function createContext(opts: { db: Db; defaultPrefix?: string; now?: () => number }): GameContext {
   return {
     db: opts.db,
-    baseConfig: opts.baseConfig,
     defaultPrefix: opts.defaultPrefix ?? '!',
     now: opts.now ?? Date.now,
-    rng: opts.rng ?? Math.random,
-    cache: { settings: new Map(), configs: new Map() },
+    cache: { settings: new Map(), cooldowns: new Map() },
   };
 }
 
@@ -52,37 +43,9 @@ export class GameError extends Error {
   }
 }
 
-/** Día lógico (YYYY-MM-DD) según el desfase horario configurado, para límites diarios. */
+/** Día lógico (YYYY-MM-DD) según un desfase horario. */
 export function dayKey(nowMs: number, offsetMinutes: number): string {
   return new Date(nowMs + offsetMinutes * 60_000).toISOString().slice(0, 10);
-}
-
-/** Próximo reinicio diario en ms epoch. */
-export function nextDayReset(nowMs: number, offsetMinutes: number): number {
-  const shifted = nowMs + offsetMinutes * 60_000;
-  const startOfDay = Math.floor(shifted / 86_400_000) * 86_400_000;
-  return startOfDay + 86_400_000 - offsetMinutes * 60_000;
-}
-
-export function randInt(rng: () => number, min: number, max: number): number {
-  return min + Math.floor(rng() * (max - min + 1));
-}
-
-export function weightedPick<T>(rng: () => number, entries: T[], weightOf: (e: T) => number): T {
-  const total = entries.reduce((s, e) => s + Math.max(0, weightOf(e)), 0);
-  if (total <= 0) return entries[0];
-  let roll = rng() * total;
-  for (const e of entries) {
-    roll -= Math.max(0, weightOf(e));
-    if (roll < 0) return e;
-  }
-  return entries[entries.length - 1];
-}
-
-/** Redondeo probabilístico: 2.3 → 2 (70%) o 3 (30%). Evita que los multiplicadores pequeños se pierdan. */
-export function stochasticRound(rng: () => number, v: number): number {
-  const base = Math.floor(v);
-  return base + (rng() < v - base ? 1 : 0);
 }
 
 export function clamp(v: number, min: number, max: number): number {

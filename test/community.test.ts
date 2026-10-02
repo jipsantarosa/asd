@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DEFAULT_CONFIG } from '../src/game/defaults';
 import { GameError, createContext } from '../src/services/context';
 import {
   KISS_PAIR_COOLDOWN_MS, createKiss, getKiss, kiss, kissBack, kissCount, kissPair, kissStats, kissTimes, rejectKiss, returnKiss,
 } from '../src/services/social';
 import { mediaHistory, mediaUrl, recordMedia } from '../src/services/userMedia';
 import { purgeUserMessages } from '../src/discord/moderation/purge';
-import { G, U, U2, makeWorld, seeded } from './helpers';
+import { G, U, U2, makeWorld } from './helpers';
 
 const U3 = '200000000000000777';
 const expectGameError = (fn: () => unknown, re?: RegExp) =>
@@ -48,7 +47,7 @@ describe('!kiss', () => {
   it('el contador sobrevive a un reinicio (mismo archivo de base, contexto nuevo)', () => {
     const w = makeWorld();
     kiss(w.ctx, G, U, U2);
-    const restarted = createContext({ db: w.ctx.db, baseConfig: structuredClone(DEFAULT_CONFIG), now: () => w.clock.t + 60_000, rng: seeded(3) });
+    const restarted = createContext({ db: w.ctx.db, now: () => w.clock.t + 60_000 });
     assert.equal(kiss(restarted, G, U2, U).pair, 2);
   });
 

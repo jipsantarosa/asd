@@ -1,10 +1,8 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, type AttachmentBuilder, type Client, type EmbedBuilder, type GuildMember,
-  type MessageActionRowComponentBuilder,
+  ActionRowBuilder, type AttachmentBuilder, type Client, type EmbedBuilder, type GuildMember, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { KeyedLock, RateLimiter } from '../services/antispam';
 import type { GameContext } from '../services/context';
-import { cid } from './ui/ids';
 
 export interface App {
   client: Client;
@@ -14,8 +12,8 @@ export interface App {
   userLock: KeyedLock;
   /** Evita dos /setup simultáneos en el mismo servidor. */
   guildLock: KeyedLock;
-  /** Tras una acción de juego: distinciones y avisos de logros (lo asigna index.ts). */
-  afterAction?: (member: GuildMember) => Promise<void>;
+  /** Tras una ronda: distinciones por nivel, anuncios de grandes premios y logros (lo asigna index.ts). */
+  afterRound?: (member: GuildMember) => Promise<void>;
 }
 
 /** Quién está mirando un panel. */
@@ -41,23 +39,4 @@ export interface Panel {
 
 export function row(...components: MessageActionRowComponentBuilder[]): Row {
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...components);
-}
-
-export type NavTarget = 'granja' | 'pesca' | 'mercado' | 'inventario' | 'perfil';
-
-const NAV: Record<NavTarget, { label: string; emoji: string }> = {
-  granja: { label: 'Granja', emoji: '🌾' },
-  pesca: { label: 'Pesca', emoji: '🎣' },
-  mercado: { label: 'Mercado', emoji: '🛒' },
-  inventario: { label: 'Mochila', emoji: '🎒' },
-  perfil: { label: 'Perfil', emoji: '👤' },
-};
-
-/** Fila de navegación entre módulos: todo ocurre en el mismo mensaje, como una app. */
-export function navRow(owner: string, current: NavTarget | null): Row {
-  const buttons = (Object.keys(NAV) as NavTarget[])
-    .filter((t) => t !== current)
-    .slice(0, 5)
-    .map((t) => new ButtonBuilder().setCustomId(cid('nav', t, owner)).setLabel(NAV[t].label).setEmoji(NAV[t].emoji).setStyle(ButtonStyle.Secondary));
-  return row(...buttons);
 }
