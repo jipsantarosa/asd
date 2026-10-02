@@ -136,6 +136,7 @@ describe('decisiones dentro de la partida', () => {
   it('blackjack: doblar cobra la apuesta extra; sin saldo no cambia nada', () => {
     const w = makeWorld();
     ensureCasinoUser(w.ctx, U);
+    applyTx(w.ctx, { userId: U, amount: 100_000, type: 'BONUS' });
     // Busca una mano sin blackjack de entrada (el azar es fijo por semilla y nonce).
     let v: RoundView<BjState> | null = null;
     for (let i = 0; i < 30 && !v; i++) {
@@ -181,6 +182,7 @@ describe('devoluciones y partidas interrumpidas', () => {
 
   it('crash interrumpido: retiro automático alcanzable se paga; si explotó con el bot vivo, pierde; si no, se devuelve', () => {
     const w = makeWorld();
+    applyTx(w.ctx, { userId: U, amount: 100_000, type: 'BONUS' });
     const results: string[] = [];
     for (let i = 0; i < 40; i++) {
       const v = startRound<CrashState>(w.ctx, req('crash', 100, parse('crash', i % 2 ? ['1.5x'] : [])));
@@ -225,7 +227,7 @@ describe('repetir, tope de premio y jackpot', () => {
     saveCasinoConfig(w.ctx, cfg, null);
     applyTx(w.ctx, { userId: U, amount: 100_000, type: 'BONUS' });
     let capped = false;
-    for (let i = 0; i < 200 && !capped; i++) {
+    for (let i = 0; i < 800 && !capped; i++) {
       const v = playInstant(w.ctx, req('roulette', 100, parse('roulette', ['17'])));
       assert.ok(v.round.payout <= 1_000);
       capped = v.settled!.capped;

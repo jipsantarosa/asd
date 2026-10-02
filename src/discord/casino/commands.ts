@@ -20,6 +20,7 @@ import { SCREENS } from './games';
 import { playGame } from './play';
 import { sendFromCommand } from './screen';
 import { tournamentCommand } from './tournamentCommands';
+import { workCommand } from './work';
 import { fairnessPanel, verifyPanel } from './ui/fairness';
 import { lobbyPanel, walletPanel } from './ui/lobby';
 import { achievementsPanel, historyPanel, profilePanel, statsPanel, type Target } from './ui/profile';
@@ -337,7 +338,7 @@ export const CASINO_COMMANDS: Command[] = [
   bonusCommand('daily', 'daily', ['diario', 'd'], '🎁 Cobrá tu bono diario (con racha).'),
   bonusCommand('weekly', 'weekly', ['semanal', 'w'], '📅 Cobrá tu bono semanal.'),
   bonusCommand('rescue', 'rescate', ['rescue', 'ayudita'], '🛟 Un rescate si te quedaste casi sin Coins.'),
-  perfil, top, rank, stats, history, logros, fairness, tournamentCommand,
+  workCommand, perfil, top, rank, stats, history, logros, fairness, tournamentCommand,
   ...GAME_COMMAND_LIST,
 ];
 

@@ -38,16 +38,16 @@ describe('migraciones', () => {
     assert.equal(db.get<{ n: number }>('SELECT COUNT(*) AS n FROM profiles')!.n, 4);
     assert.equal(db.get<{ quantity: number }>('SELECT quantity FROM inventory WHERE user_id = ?', A)!.quantity, 4);
 
-    // Bono de bienvenida a los veteranos: 1 Coin cada 100 monedas (sumando servidores), con tope de 25.000, una sola vez.
+    // Bono de bienvenida a los veteranos: 1 Coin cada 1.000 monedas (sumando servidores), con tope de 2.500, una sola vez.
     const ctx = createContext({ db, now: () => 1_750_000_000_000 });
     ensureCasinoUser(ctx, A);
     ensureCasinoUser(ctx, A);
     ensureCasinoUser(ctx, B);
     ensureCasinoUser(ctx, C);
     const start = DEFAULT_CASINO.startingBalance;
-    assert.equal(getBalance(ctx, A), start + 15_000);
-    assert.equal(getBalance(ctx, B), start + 25_000, 'tope de 25.000');
-    assert.equal(getBalance(ctx, C), start, 'menos de 100 monedas no da bono');
+    assert.equal(getBalance(ctx, A), start + 1_500);
+    assert.equal(getBalance(ctx, B), start + 2_500, 'tope de 2.500');
+    assert.equal(getBalance(ctx, C), start, 'menos de 1.000 monedas no da bono');
     assert.ok(ledgerAudit(ctx).ok);
   });
 

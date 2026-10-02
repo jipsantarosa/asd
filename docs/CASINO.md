@@ -19,7 +19,7 @@ Documento de diseño de la reestructuración: el bot pasa de granja y pesca a un
 | Moderación, automod, voz temporal, besos, historiales, premium, registros, roles, purga, backups | Desacoplados de la granja | **Se conservan** |
 | Distinciones (roles por nivel) | Por nivel de granja y pesca | **Se adaptan** al nivel del casino |
 
-**Datos viejos:** las tablas de la granja **no se borran** (las migraciones nunca destruyen datos). Al abrir su cuenta del casino, quien tenía monedas de El Valle recibe un **bono de bienvenida** (1 Coin cada 100 monedas viejas, con tope de 25.000). Así se reconoce a los veteranos sin importar la inflación de la economía anterior.
+**Datos viejos:** las tablas de la granja **no se borran** (las migraciones nunca destruyen datos). Al abrir su cuenta del casino, quien tenía monedas de El Valle recibe un **bono de bienvenida** (1 Coin cada 1.000 monedas viejas, con tope de 2.500). Así se reconoce a los veteranos sin importar la inflación de la economía anterior.
 
 ## 2. Principios
 
@@ -95,13 +95,14 @@ El motor se encarga del resto: validar la apuesta, cobrarla, reservar el nonce, 
 
 | Entradas (se crean Coins) | Por defecto |
 |---|---|
-| Saldo inicial | 5.000 |
-| Bono diario (`!daily`) | 1.000 + 10 % por día de racha (hasta +100 %) |
-| Bono semanal (`!weekly`) | 7.500 |
-| Rescate (`!rescate`) | 500 si tenés menos de 100 y ninguna partida abierta, cada 8 h |
-| Actividad (mensajes) | 4 a 12 por mensaje válido, espera de 60 s, tope de 600 por día, rendimiento decreciente |
+| Saldo inicial | 1.000 |
+| Bono diario (`!daily`) | 100 + 5 % por día de racha (hasta +30 %) |
+| Bono semanal (`!weekly`) | 400 |
+| Trabajo (`!work`) | ≈20–80 por turno según el trabajo; 1 turno cada 90 min, máximo 5 por día; el Hacker puede pagar multas |
+| Rescate (`!rescate`) | 100 si tenés menos de 20 y ninguna partida abierta, cada 24 h |
+| Actividad (mensajes) | 1 a 3 por mensaje válido, espera de 2 min, tope de 50 por día, rendimiento decreciente |
 | Subida de nivel | 20 × nivel |
-| Logros | 250 a 25.000, una sola vez |
+| Logros | 25 a 2.500, una sola vez |
 | Torneos automáticos | diario 30.000 · semanal 150.000 (pozos fijos) |
 | Juegos ganados | según el RTP de cada juego |
 
@@ -115,7 +116,7 @@ El motor se encarga del resto: validar la apuesta, cobrarla, reservar el nonce, 
 - **No hay transferencias entre jugadores.** Es la decisión más importante: sin `!pay`, las cuentas alternativas no pueden juntar bonos en una cuenta principal.
 - Los bonos tienen esperas por persona (no por servidor): tener muchos servidores no multiplica nada.
 - La actividad tiene filtros de calidad, tope diario y rendimiento decreciente (sección 7).
-- Hay un premio máximo por ronda (5.000.000), apuestas mínima y máxima por juego, y un tope duro de saldo (10¹⁵, muy por debajo de 2⁵³).
+- Hay un premio máximo por ronda (2.000.000), apuestas mínima y máxima por juego, y un tope duro de saldo (10¹⁵, muy por debajo de 2⁵³).
 - El jackpot sale del 1 % de las apuestas de Slots, no se crea de la nada (solo la semilla inicial).
 
 **RTP por juego (configurable por el dueño):** Crash, Plinko, Minas, Pollo, Globos, Hilo y Dragon Tower usan multiplicadores calculados como `RTP / probabilidad`: el valor esperado es el RTP en cualquier punto donde cobres. Slots escala su tabla de pagos al RTP configurado. Ruleta (europea, 2,7 % por el 0) y Blackjack (≈0,5 % con estas reglas) tienen la ventaja en sus propias reglas.
@@ -146,17 +147,17 @@ apostar ─┬─ instantáneo (ruleta, slots, plinko) ── jugar ── liqui
 ## 7. Actividad (anti-farming)
 
 Un mensaje da Coins solo si:
-- no es un comando;
+- tiene al menos 8 letras y 3 palabras;
 - tiene al menos 6 letras y 2 palabras;
-- no repite uno de tus últimos mensajes;
+- pasaron 2 min desde tu última recompensa;
 - pasaron 60 s desde tu última recompensa;
-- tu cuenta tiene más de 7 días y llevás más de 1 h en el servidor;
+- tu cuenta tiene más de 14 días y llevás más de 24 h en el servidor;
 - el servidor tiene la actividad activada.
 
-El monto es de 4 a 12 Coins por mensaje:
-- **Rendimiento decreciente:** desde el mensaje recompensado 30 del día paga la mitad, y desde el 60, un cuarto.
-- **Racha:** suma +5 % por día seguido con actividad (hasta +50 %).
-- **Tope diario:** 600 Coins. El automod corre antes: el spam nunca paga.
+El monto es de 1 a 3 Coins por mensaje:
+- **Rendimiento decreciente:** desde el mensaje recompensado 15 del día paga la mitad, y desde el 30, un cuarto.
+- **Racha:** suma +3 % por día seguido con actividad (hasta +15 %).
+- **Tope diario:** 50 Coins. El automod corre antes: el spam nunca paga.
 
 ## 8. Datos (migración 10)
 
@@ -176,7 +177,7 @@ El monto es de 4 a 12 Coins por mensaje:
 ## 9. Comandos
 
 - **Juegos:** `!blackjack` `!ruleta` `!slots` `!crash` `!plinko` `!minas` `!pollo` `!globos` `!hilo` `!dragon`. Sin argumentos muestran las reglas y la tabla de pagos.
-- **Economía:** `!balance` `!daily` `!weekly` `!rescate`.
+- **Economía:** `!balance` `!work` `!daily` `!weekly` `!rescate`.
 - **Perfil y social:** `!perfil` `!top [categoría] [página]` `!rank` `!stats [juego]` `!history [juego]` `!logros` `!fairness`.
 - **Torneos:** `!torneo` (lista, ranking y unirse).
 - **Dueño del bot:**

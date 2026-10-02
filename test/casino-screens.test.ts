@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ContainerBuilder, type APIEmbed } from 'discord.js';
 import { GAME_IDS, type GameId } from '../src/casino/config';
-import { actOnRound, playInstant, startRound, type RoundView } from '../src/casino/engine';
+import { actOnRound, playInstant, refundRound, startRound, type RoundView } from '../src/casino/engine';
 import { applyTx, ensureCasinoUser } from '../src/casino/economy';
 import { GAMES } from '../src/casino/games';
 import { ensureAutoTournaments } from '../src/casino/tournaments';
@@ -96,6 +96,8 @@ function playSome(w: TestWorld, game: GameId): RoundView[] {
       else if (game === 'tower') tryAct('tile', 0);
       if (game === 'crash') w.clock.advance(2_000); // en 1,00x todavía no se puede retirar
       if (v.round.status === 'active') tryAct(game === 'crash' ? 'cashout' : 'cash');
+      // Si quedó abierta (p. ej. un empate en Hilo antes de acertar), se devuelve para poder jugar la siguiente.
+      if (v.round.status === 'active') views.push(refundRound(w.ctx, v.round.id, 'prueba')!);
     }
     w.clock.advance(5_000);
   }

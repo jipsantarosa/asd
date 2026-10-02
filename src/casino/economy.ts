@@ -18,14 +18,14 @@ const SNOWFLAKE = /^\d{17,20}$/;
 
 export const TX_TYPES = [
   'STARTER', 'BET', 'WIN', 'LOSS', 'PUSH', 'REFUND', 'BONUS', 'ACTIVITY', 'LEVEL_REWARD',
-  'ACHIEVEMENT_REWARD', 'TOURNAMENT_REWARD', 'TOURNAMENT_ENTRY', 'JACKPOT', 'DROP', 'ADMIN_ADJUSTMENT',
+  'ACHIEVEMENT_REWARD', 'TOURNAMENT_REWARD', 'TOURNAMENT_ENTRY', 'JACKPOT', 'DROP', 'ADMIN_ADJUSTMENT', 'WORK', 'FINE',
 ] as const;
 export type TxType = (typeof TX_TYPES)[number];
 
 /** Tipos que restan (los demás suman, salvo los ajustes administrativos, que pueden ir para los dos lados). */
-const DEBITS: TxType[] = ['BET', 'TOURNAMENT_ENTRY'];
+const DEBITS: TxType[] = ['BET', 'TOURNAMENT_ENTRY', 'FINE'];
 /** Ingresos que no vienen de apostar (para la estadística de bonos). */
-const BONUS_TYPES: TxType[] = ['BONUS', 'ACTIVITY', 'LEVEL_REWARD', 'ACHIEVEMENT_REWARD', 'TOURNAMENT_REWARD', 'DROP'];
+const BONUS_TYPES: TxType[] = ['BONUS', 'ACTIVITY', 'LEVEL_REWARD', 'ACHIEVEMENT_REWARD', 'TOURNAMENT_REWARD', 'DROP', 'WORK'];
 
 export interface TxInput {
   userId: string;
@@ -107,7 +107,7 @@ function writeTx(ctx: GameContext, input: TxInput, before: number): TxRecord {
 
 /**
  * Crea la cuenta del casino si no existe: perfil, billetera, saldo inicial y (una sola vez) el bono de
- * bienvenida para quien tenía monedas en la granja de El Valle (1 Coin cada 100, con tope de 25.000).
+ * bienvenida para quien tenía monedas en la granja de El Valle (1 Coin cada 1.000, con tope de 2.500).
  * Idempotente: dos llamadas simultáneas crean una sola cuenta.
  */
 export function ensureCasinoUser(ctx: GameContext, userId: string): void {
@@ -123,7 +123,7 @@ export function ensureCasinoUser(ctx: GameContext, userId: string): void {
     const cfg = getCasinoConfig(ctx);
     if (cfg.startingBalance > 0) writeTx(ctx, { userId, amount: cfg.startingBalance, type: 'STARTER', key: `starter:${userId}` }, 0);
     const legacy = ctx.db.get<{ coins: number | null }>('SELECT SUM(coins) AS coins FROM profiles WHERE user_id = ?', userId)?.coins ?? 0;
-    const bonus = Math.min(25_000, Math.floor(Math.max(0, legacy) / 100));
+    const bonus = Math.min(2_500, Math.floor(Math.max(0, legacy) / 1_000));
     if (bonus > 0) {
       writeTx(ctx, { userId, amount: bonus, type: 'BONUS', key: `legacy:${userId}`, meta: { legacy: true, valleCoins: legacy } }, getBalance(ctx, userId));
     }

@@ -27,7 +27,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       '**no se compra, no se retira y no se cambia por dinero real** (ni por nada fuera del bot).',
       '',
       `1. \`${p}balance\` — tu saldo (empezás con Coins de regalo).`,
-      `2. \`${p}daily\` y \`${p}weekly\` — bonos gratis. Chatear también suma Coins (con límites).`,
+      `2. \`${p}work\` — trabajá (Pedidos Ya, Cirujeando, Verdulero, Vender informes, Hacker). \`${p}daily\` y \`${p}weekly\` dan poquito. Las Coins cuestan: cuidalas.`,
       `3. \`${p}casino\` — el lobby con todos los juegos. Escribí un juego sin apuesta (\`${p}crash\`) para ver sus reglas.`,
       `4. Apostá: \`${p}crash 500 2.5x\`, \`${p}ruleta 200 rojo\`, \`${p}minas 100 5\`…`,
       `5. \`${p}perfil\`, \`${p}top\` y \`${p}torneo\` para ver tu progreso y competir.`,
@@ -52,7 +52,8 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
     ].join('\n'),
     economia: [
       '🪙 **Coins** — la misma billetera en todos los servidores. No hay transferencias entre personas.',
-      `• **Bonos:** \`${p}daily\` (con racha), \`${p}weekly\`, y \`${p}rescate\` si te quedaste casi sin nada.`,
+      `• **Trabajo:** \`${p}work\` — un turno cada 90 min, hasta 5 por día. 🛵 Pedidos Ya y 🗑️ Cirujeando de entrada; 🥬 Verdulero (5 turnos), 📄 Vender informes (15) y 💻 Hacker (40, con riesgo de multa).`,
+      `• **Bonos:** \`${p}daily\` (poquito, con racha), \`${p}weekly\`, y \`${p}rescate\` si te quedaste sin nada.`,
       '• **Actividad:** chatear suma unas pocas Coins por mensaje, con espera, tope diario y rendimiento decreciente. Spam, mensajes repetidos o muy cortos no cuentan.',
       '• **Nivel:** sube con el **total apostado** (no con lo ganado) y cada nivel da una recompensa. Los rangos van de 🥉 Bronce a 👑 Leyenda.',
       `• **Logros** (\`${p}logros\`): premios únicos por hitos.`,
@@ -102,7 +103,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
     comandos: [
       `Prefijo de este servidor: \`${p}\` (también podés mencionarme).`,
       '',
-      `**Casino:** \`${p}casino\` · \`${p}balance\` · \`${p}daily\` · \`${p}weekly\` · \`${p}rescate\``,
+      `**Casino:** \`${p}casino\` · \`${p}balance\` · \`${p}work\` · \`${p}daily\` · \`${p}weekly\` · \`${p}rescate\``,
       `**Juegos:** \`${p}bj\` · \`${p}ruleta\` · \`${p}slots\` · \`${p}crash\` · \`${p}plinko\` · \`${p}minas\` · \`${p}pollo\` · \`${p}globos\` · \`${p}hilo\` · \`${p}dragon\``,
       `**Progreso:** \`${p}perfil\` · \`${p}top [categoría] [página]\` · \`${p}rank\` · \`${p}stats [juego]\` · \`${p}history [juego]\` · \`${p}logros\` · \`${p}fairness\` · \`${p}torneo\``,
       `**Comunidad:** \`${p}kiss\` · \`${p}besos\` · \`${p}avs\` · \`${p}banners\` · \`${p}names\` · \`${p}steal\` · \`${p}premium\``,

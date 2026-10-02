@@ -230,11 +230,11 @@ describe('actividad (anti-farming)', () => {
     w.clock.advance(10_000);
     const cd = msg(w, 'b', 'segundo mensaje distinto del primero');
     assert.equal('reason' in cd && cd.reason, 'cooldown');
-    w.clock.advance(60_000);
+    w.clock.advance(DEFAULT_CASINO.activity.cooldownSeconds * 1000);
     assert.equal(msg(w, 'c', 'tercer mensaje que habla de otra cosa').awarded, 10);
-    w.clock.advance(60_000);
+    w.clock.advance(DEFAULT_CASINO.activity.cooldownSeconds * 1000);
     assert.equal(msg(w, 'd', 'cuarto mensaje bastante diferente al resto').awarded, 5, 'recorta al tope diario');
-    w.clock.advance(60_000);
+    w.clock.advance(DEFAULT_CASINO.activity.cooldownSeconds * 1000);
     const cap = msg(w, 'e', 'quinto mensaje que ya no debería pagar nada');
     assert.equal('reason' in cap && cap.reason, 'cap');
     assert.equal(decayFactor(29, 30), 1);

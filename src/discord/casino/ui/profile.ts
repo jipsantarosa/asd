@@ -116,7 +116,7 @@ const OUTCOME_EMOJI = { won: '✅', lost: '❌', push: '🤝', refunded: '↩️
 const TX_LABEL: Record<TxType, string> = {
   STARTER: '🎉 Saldo inicial', BET: '🎲 Apuesta', WIN: '🏆 Premio', LOSS: '❌ Pérdida', PUSH: '🤝 Empate', REFUND: '↩️ Devolución', BONUS: '🎁 Bono',
   ACTIVITY: '💬 Actividad', LEVEL_REWARD: '⭐ Nivel', ACHIEVEMENT_REWARD: '🏅 Logro', TOURNAMENT_REWARD: '🏆 Torneo', TOURNAMENT_ENTRY: '🎟️ Entrada a torneo',
-  JACKPOT: '💰 Jackpot', DROP: '🌧️ Lluvia de monedas', ADMIN_ADJUSTMENT: '🛠️ Ajuste del administrador',
+  JACKPOT: '💰 Jackpot', DROP: '🌧️ Lluvia de monedas', ADMIN_ADJUSTMENT: '🛠️ Ajuste del administrador', WORK: '🧰 Trabajo', FINE: '🚨 Multa',
 };
 
 /** Historial de rondas (filtrable por juego) o de movimientos de la billetera. */

@@ -60,6 +60,8 @@ export interface CasinoConfig {
     minMemberHours: number;
   };
   levels: { rewardPerLevel: number };
+  /** !work: turnos con espera compartida entre trabajos y tope diario. */
+  work: { enabled: boolean; cooldownMinutes: number; maxShiftsPerDay: number; payPct: number; minAccountDays: number };
   jackpot: { seed: number; contributionPct: number; fullBet: number };
   tournaments: { daily: AutoTournament; weekly: AutoTournament };
   /** Anuncio de grandes premios en el canal del casino de cada servidor. */
@@ -72,12 +74,12 @@ export interface CasinoConfig {
   boost: { activity: number; until: number };
 }
 
-const game = (edgePct: number, cooldownMs = 1000): GameSettings => ({ enabled: true, minBet: 10, maxBet: 250_000, edgePct, cooldownMs });
+const game = (edgePct: number, cooldownMs = 1000): GameSettings => ({ enabled: true, minBet: 10, maxBet: 50_000, edgePct, cooldownMs });
 
 export const DEFAULT_CASINO: CasinoConfig = {
   currency: { name: 'Coins', emoji: '🪙' },
-  startingBalance: 5_000,
-  maxPayout: 5_000_000,
+  startingBalance: 1_000,
+  maxPayout: 2_000_000,
   games: {
     blackjack: game(0.5),
     roulette: game(2.7),
@@ -90,20 +92,21 @@ export const DEFAULT_CASINO: CasinoConfig = {
     hilo: game(3),
     tower: game(3),
   },
-  daily: { amount: 1_000, streakPct: 10, streakMaxDays: 10 },
-  weekly: { amount: 7_500 },
-  rescue: { amount: 500, below: 100, cooldownHours: 8 },
+  daily: { amount: 100, streakPct: 5, streakMaxDays: 6 },
+  weekly: { amount: 400 },
+  rescue: { amount: 100, below: 20, cooldownHours: 24 },
   activity: {
-    enabled: true, min: 4, max: 12, cooldownSeconds: 60, dailyCap: 600, minLetters: 6, minWords: 2,
-    decayAfter: 30, streakPct: 5, streakMaxDays: 10, minAccountDays: 7, minMemberHours: 1,
+    enabled: true, min: 1, max: 3, cooldownSeconds: 120, dailyCap: 50, minLetters: 8, minWords: 3,
+    decayAfter: 15, streakPct: 3, streakMaxDays: 5, minAccountDays: 14, minMemberHours: 24,
   },
-  levels: { rewardPerLevel: 20 },
-  jackpot: { seed: 25_000, contributionPct: 1, fullBet: 1_000 },
+  levels: { rewardPerLevel: 3 },
+  work: { enabled: true, cooldownMinutes: 90, maxShiftsPerDay: 5, payPct: 100, minAccountDays: 14 },
+  jackpot: { seed: 5_000, contributionPct: 1, fullBet: 500 },
   tournaments: {
-    daily: { enabled: true, metric: 'profit', prizes: [15_000, 9_000, 6_000], minRounds: 10 },
-    weekly: { enabled: true, metric: 'wagered', prizes: [60_000, 40_000, 25_000, 15_000, 10_000], minRounds: 30 },
+    daily: { enabled: true, metric: 'profit', prizes: [1_500, 900, 600], minRounds: 15 },
+    weekly: { enabled: true, metric: 'wagered', prizes: [6_000, 4_000, 2_500, 1_500, 1_000], minRounds: 50 },
   },
-  bigWin: { multiplier: 50, amount: 100_000 },
+  bigWin: { multiplier: 50, amount: 20_000 },
   abandonMinutes: 30,
   timezoneOffsetMinutes: -180,
   boost: { activity: 1, until: 0 },
@@ -146,6 +149,10 @@ export const CONFIG_FIELDS: Record<string, FieldDef> = {
   'activity.minAccountDays': { label: 'Actividad: antigüedad mínima de la cuenta (días)', min: 0, max: 365 },
   'activity.minMemberHours': { label: 'Actividad: horas mínimas en el servidor', min: 0, max: 720 },
   'levels.rewardPerLevel': { label: 'Recompensa por nivel (× nivel)', min: 0, max: 100_000 },
+  'work.cooldownMinutes': { label: 'Trabajo: minutos entre turnos', min: 5, max: 1_440 },
+  'work.maxShiftsPerDay': { label: 'Trabajo: turnos por día', min: 1, max: 48 },
+  'work.payPct': { label: 'Trabajo: % del sueldo base', min: 0, max: 1_000 },
+  'work.minAccountDays': { label: 'Trabajo: antigüedad mínima de la cuenta (días)', min: 0, max: 365 },
   'jackpot.seed': { label: 'Jackpot: monto inicial', min: 0, max: 1_000_000_000 },
   'jackpot.contributionPct': { label: 'Jackpot: % de cada apuesta de Slots', min: 0, max: 5, decimals: 2 },
   'jackpot.fullBet': { label: 'Jackpot: apuesta para cobrarlo entero', min: 1, max: 1_000_000_000 },

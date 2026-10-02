@@ -55,7 +55,7 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 - **Motor:** `better-sqlite3` si funciona en tu PC; si no, el SQLite que trae Node (22.13+). El archivo es el mismo con cualquiera de los dos.
 - Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada (tabla `schema_migrations`).
-- **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 100 monedas viejas, sumando servidores, con tope de 25.000).
+- **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 1.000 monedas viejas, sumando servidores, con tope de 2.500).
 - Las migraciones 1 a 9 (granja, pesca, comunidad, premium, besos, voz temporal y moderación) siguen en el código para que cualquier base vieja pueda actualizarse.
 - **Copia de seguridad automática** diaria en `data/backups/valle-AAAA-MM-DD.db` (se guardan 7). Para restaurar: detené el bot, copiá la que quieras como `data/valle.db` y borrá `valle.db-wal` y `valle.db-shm`.
 - El bot está pensado para **un solo proceso** (transacciones SQLite y candados en memoria).
@@ -66,7 +66,16 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 - **Coins 🪙**, una billetera por persona que vale en todos los servidores donde está el bot. **No hay transferencias entre personas** (así las cuentas alternativas no pueden juntar bonos en una principal).
 - Cada cambio de saldo es una **transacción** con saldo anterior y nuevo, tipo (`BET`, `WIN`, `LOSS`, `PUSH`, `REFUND`, `BONUS`, `ACTIVITY`, `LEVEL_REWARD`, `ACHIEVEMENT_REWARD`, `TOURNAMENT_REWARD`, `TOURNAMENT_ENTRY`, `JACKPOT`, `DROP`, `ADMIN_ADJUSTMENT`…) y, cuando corresponde, una **clave única** que impide pagar dos veces. La base verifica con `CHECK` que cada movimiento cuadre y que ningún saldo sea negativo. `!casino audit` comprueba que la suma de los saldos sea igual a la suma de las transacciones.
-- **Entradas** (configurables por el dueño): saldo inicial 5.000 · `!daily` 1.000 + 10 % por día de racha (hasta +100 %) · `!weekly` 7.500 · `!rescate` 500 si tenés menos de 100 (cada 8 h) · actividad 4–12 por mensaje (tope 600/día) · subir de nivel · logros · torneos.
+- **La economía está pensada para ser difícil de farmear** (todo configurable por el dueño): saldo inicial 1.000 · `!daily` 100 + 5 % por día de racha (hasta +30 %) · `!weekly` 400 · `!rescate` 100 si tenés menos de 20 (cada 24 h) · actividad 1–3 por mensaje (tope 50/día) · subir de nivel 3 × nivel · logros 25 a 2.500 · torneos.
+- **`!work` — trabajos:** un turno cada **90 minutos** (la espera es la misma para todos los trabajos) y como máximo **5 turnos por día**; cuentas de Discord de menos de 14 días no pueden trabajar. Un día entero de trabajo da unas 150–250 Coins.
+
+  | Trabajo | Requisito | Sueldo por turno |
+  |---|---|---|
+  | 🛵 Pedidos Ya | — | 20–35 (propina hasta 50; a veces te cancelan: 5–10) |
+  | 🗑️ Cirujeando | — | muy variable: 0–25, a veces 50–90 |
+  | 🥬 Verdulero | 5 turnos | 30–45, estable |
+  | 📄 Vender informes | 15 turnos | 35–55 (a veces 55–80, a veces no te pagan) |
+  | 💻 Hacker | 40 turnos | 50–160, pero 40 % de chance de **multa** de 25–60 |
 - **Salidas:** la ventaja de la casa de cada juego (≈0,5–3,9 %) y las entradas a torneos especiales. El jackpot de Slots sale del 1 % de sus apuestas.
 - **Nivel y rango:** el nivel sube con el **total apostado** (no con lo ganado) y cada nivel paga una recompensa. Rangos: 🥉 Bronce, 🥈 Plata, 🥇 Oro, 💠 Platino, 💎 Diamante, 👑 Leyenda.
 - **Estadísticas por persona:** saldo, total ganado, perdido y apostado, mayor apuesta, mayor premio, mayor multiplicador, partidas, victorias, derrotas, beneficio histórico, racha actual y mejor racha, torneos jugados y ganados, bonos recibidos, fechas de creación y de última actividad; y las mismas por juego.
@@ -105,7 +114,7 @@ Cada ronda sale de `HMAC-SHA256(semilla_del_servidor, "semilla_del_cliente:nonce
 
 ### Actividad (anti-farming)
 
-Un mensaje paga solo si no es un comando, tiene al menos 6 letras y 2 palabras reales, no repite (ni casi repite) tus últimos mensajes, no estás mandando ráfagas, pasaron 60 s desde tu última recompensa, tu cuenta tiene más de 7 días y llevás más de 1 h en el servidor. Desde el mensaje 30 del día paga la mitad y desde el 60 un cuarto; la racha de días seguidos suma hasta +50 %; el tope es de 600 por día. El automod corre antes: el spam nunca paga.
+Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras y 3 palabras reales, no repite (ni casi repite) tus últimos mensajes, no estás mandando ráfagas, pasaron 2 min desde tu última recompensa, tu cuenta tiene más de 14 días y llevás más de 24 h en el servidor. Desde el mensaje 15 del día paga la mitad y desde el 30 un cuarto; la racha de días seguidos suma hasta +15 %; el tope es de 50 por día. El automod corre antes: el spam nunca paga.
 
 ### Administración
 
@@ -124,7 +133,8 @@ Un mensaje paga solo si no es un comando, tiene al menos 6 letras y 2 palabras r
 | `/casino` · `!casino` | todos | Lobby: saldo, jackpot, torneos y juegos con sus reglas |
 | `/blackjack` `/ruleta` `/slots` `/crash` `/plinko` `/minas` `/pollo` `/globos` `/hilo` `/dragon` | todos | Los 10 juegos (también por prefijo, con alias como `!bj`, `!rl`, `!mines`, `!tower`) |
 | `/balance [usuario]` · `!bal` | todos | Billetera, bonos disponibles y actividad del día |
-| `/daily` · `/weekly` · `/rescate` | todos | Bonos |
+| `/work [trabajo]` · `!work` | todos | Trabajos: Pedidos Ya, Cirujeando, Verdulero, Vender informes, Hacker |
+| `/daily` · `/weekly` · `/rescate` | todos | Bonos (chicos) |
 | `/perfil [usuario]` · `!profile` | todos | Perfil con nivel, rango y estadísticas; pestañas de stats, historial y logros |
 | `/top [categoria] [pagina] [servidor]` · `!top 2` · `!top ganancias` | todos | **💰 Richest Players** (por saldo) y categorías secundarias, global o del servidor |
 | `/rank [usuario]` | todos | Puesto en cada ranking |
@@ -247,7 +257,7 @@ Qué hace al ejecutarse:
 npm test
 ```
 
-Son 178 tests sin Discord real. Cubren, entre otros:
+Son 184 tests sin Discord real. Cubren, entre otros:
 
 - **invariantes de la economía:** suma de saldos = suma de transacciones, ningún saldo negativo, cada ronda con un único cierre, lo apostado y lo pagado de cada ronda igual a sus movimientos, y las estadísticas de cada persona iguales a la suma de sus rondas — verificado también con **1.500 rondas al azar** de los 10 juegos;
 - `applyTx`: enteros seguros, signo según el tipo, fondos insuficientes sin cambios, idempotencia y `CHECK` de la base;
@@ -256,6 +266,7 @@ Son 178 tests sin Discord real. Cubren, entre otros:
 - RTP de cada juego: ruleta 36/37, tabla de Slots escalada, P(Crash ≥ x) = RTP/x, tablas de Plinko, valor esperado de cada escalón en Minas, Pollo, Globos y Dragon Tower, Hilo y una simulación de Blackjack;
 - azar verificable (determinismo, rotación, hash, recálculo de rondas reales), tope de premio, jackpot, "repetir" una sola vez;
 - torneos: creación automática idempotente, puntuación, entradas, cancelación con devolución, cierre que paga una sola vez y rondas mínimas;
+- `!work`: los 5 trabajos, espera compartida, tope diario, desbloqueo por experiencia, multa del hacker sin saldo negativo, cuentas nuevas o suspendidas;
 - bonos (racha, espera, rescate), actividad anti-farming (cortos, repetidos, ráfagas, espera, tope, rendimiento decreciente, cuentas nuevas, mismo mensaje), lluvias de monedas, rankings y ajustes;
 - **todas las pantallas y paneles** contra los límites de Discord (embeds, filas, botones, `customId` y el máximo de 40 componentes en Components V2);
 - migraciones (una base vieja con granja sube sin perder datos), comandos sin nombres repetidos y slash válidos, `!steal`, besos, voz temporal, moderación, automod, historiales, premium, `/setup` y copias de seguridad.
@@ -263,7 +274,8 @@ Son 178 tests sin Discord real. Cubren, entre otros:
 ## 12. Checklist de verificación en un servidor de prueba
 
 - [ ] El bot arranca y registra los comandos (aparecen `/casino`, los 10 juegos, `/top`, `/torneo`, `/steal` y el menú **Apps → Robar emoji o sticker**).
-- [ ] `!balance`: 5.000 Coins. `!daily` dos veces: la segunda dice cuándo volver. `!weekly`.
+- [ ] `!balance`: 1.000 Coins. `!daily` (100) dos veces: la segunda dice cuándo volver. `!weekly` (400).
+- [ ] `!work`: lista de trabajos; elegir Pedidos Ya → cobra; elegir otro enseguida → "Estás cansado"; Verdulero, Informes y Hacker aparecen con 🔒.
 - [ ] `!casino`: lobby con saldo, jackpot y torneos diario y semanal en curso. El menú muestra las reglas de cada juego.
 - [ ] `!ruleta 100 rojo`, `!slots 100` y `!plinko 100 alto 16`: animación editando el mismo mensaje y resultado con saldo, nivel y logros. **🔁 Repetir** juega otra; tocarlo de nuevo en el mensaje viejo dice que ya se usó.
 - [ ] `!crash 100`: el multiplicador sube; **Retirar** paga. `!crash 100 1.5x`: retira solo en 1,50x. Reiniciar el bot en pleno vuelo con retiro automático: al volver, el mensaje muestra el resultado.

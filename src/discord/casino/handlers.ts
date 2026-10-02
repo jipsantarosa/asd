@@ -18,6 +18,7 @@ import { cid } from '../ui/ids';
 import { dropPanel } from './admin';
 import { bonusEmbed } from './commands';
 import { gameMeta, parseAmount } from './format';
+import { workHandler } from './work';
 import { SCREENS } from './games';
 import { afterSettle, finishLive, hasLiveRunner, playAction, rebet, render } from './play';
 import { animate, payloadOf, sendFromButton, updateFromButton } from './screen';
@@ -319,4 +320,5 @@ export const CASINO_HANDLERS: Record<string, Handler> = {
   ct: tournamentHandler,
   cd: dropHandler,
   ca: adminHandler,
+  cw: workHandler,
 };

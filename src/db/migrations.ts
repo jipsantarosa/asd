@@ -927,6 +927,63 @@ CREATE TABLE casino_admin_log (
 CREATE INDEX ix_casino_admin_log ON casino_admin_log (created_at DESC);
 `,
   },
+  {
+    id: 11,
+    name: 'casino_trabajos',
+    sql: `
+-- ── !work: tipos de movimiento WORK (sueldo) y FINE (multa) ──
+-- SQLite no permite cambiar un CHECK: se recrea la tabla copiando todos los movimientos tal cual.
+CREATE TABLE casino_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  tx_id           TEXT NOT NULL UNIQUE,
+  user_id         TEXT NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'coins',
+  amount          INTEGER NOT NULL,
+  balance_before  INTEGER NOT NULL CHECK (balance_before >= 0),
+  balance_after   INTEGER NOT NULL CHECK (balance_after >= 0),
+  type            TEXT NOT NULL CHECK (type IN ('STARTER','BET','WIN','LOSS','PUSH','REFUND','BONUS','ACTIVITY','LEVEL_REWARD',
+                    'ACHIEVEMENT_REWARD','TOURNAMENT_REWARD','TOURNAMENT_ENTRY','JACKPOT','DROP','ADMIN_ADJUSTMENT','WORK','FINE')),
+  game            TEXT,
+  round_id        INTEGER,
+  guild_id        TEXT,
+  idempotency_key TEXT UNIQUE,
+  metadata        TEXT,
+  created_at      INTEGER NOT NULL,
+  CHECK (balance_after = balance_before + amount)
+);
+INSERT INTO casino_transactions_new SELECT * FROM casino_transactions;
+DROP TABLE casino_transactions;
+ALTER TABLE casino_transactions_new RENAME TO casino_transactions;
+CREATE INDEX ix_casino_tx_user  ON casino_transactions (user_id, id DESC);
+CREATE INDEX ix_casino_tx_round ON casino_transactions (round_id) WHERE round_id IS NOT NULL;
+
+-- ── Experiencia de trabajo y turnos por día ──
+ALTER TABLE casino_users ADD COLUMN work_shifts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE casino_users ADD COLUMN last_work_at INTEGER;
+CREATE TABLE casino_work (
+  user_id TEXT NOT NULL,
+  day     TEXT NOT NULL,
+  shifts  INTEGER NOT NULL DEFAULT 0,
+  earned  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, day)
+);
+
+-- ── Economía más dura: si el dueño ya había guardado una configuración, se bajan solo los ingresos gratis
+-- (bonos, actividad, niveles y premios de torneos automáticos). Lo demás (juegos, apuestas, ventajas) queda igual. ──
+UPDATE casino_config SET value = json_set(value,
+  '$.startingBalance', 1000,
+  '$.daily.amount', 100, '$.daily.streakPct', 5, '$.daily.streakMaxDays', 6,
+  '$.weekly.amount', 400,
+  '$.rescue.amount', 100, '$.rescue.below', 20, '$.rescue.cooldownHours', 24,
+  '$.activity.min', 1, '$.activity.max', 3, '$.activity.cooldownSeconds', 120, '$.activity.dailyCap', 50,
+  '$.activity.minLetters', 8, '$.activity.minWords', 3, '$.activity.decayAfter', 15, '$.activity.streakPct', 3,
+  '$.activity.streakMaxDays', 5, '$.activity.minAccountDays', 14, '$.activity.minMemberHours', 24,
+  '$.levels.rewardPerLevel', 3,
+  '$.tournaments.daily.prizes', json('[1500,900,600]'), '$.tournaments.daily.minRounds', 15,
+  '$.tournaments.weekly.prizes', json('[6000,4000,2500,1500,1000]'), '$.tournaments.weekly.minRounds', 50
+) WHERE key = 'main';
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

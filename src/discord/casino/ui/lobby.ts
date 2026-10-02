@@ -3,6 +3,7 @@ import { bonusStatus } from '../../../casino/bonus';
 import { GAME_IDS, getCasinoConfig, type GameId } from '../../../casino/config';
 import { activeRounds } from '../../../casino/engine';
 import { jackpotAmount } from '../../../casino/jackpot';
+import { workStatus } from '../../../casino/work';
 import { listTournaments } from '../../../casino/tournaments';
 import { getCasinoUser, levelProgress, rankFor } from '../../../casino/users';
 import type { GameContext } from '../../../services/context';
@@ -56,7 +57,7 @@ export function lobbyPanel(ctx: GameContext, v: Viewer, prefix: string): Panel {
       ...games,
       '',
       tours.length ? `🏟️ **Torneos en curso:** ${tours.map((t) => `${t.name} (termina ${rel(t.endsAt)})`).join(' · ')}` : '🏟️ Sin torneos en curso.',
-      `🎁 Bonos: \`${prefix}daily\` · \`${prefix}weekly\` · \`${prefix}rescate\` — Ayuda: \`${prefix}ayuda\``,
+      `🎁 Coins: \`${prefix}work\` · \`${prefix}daily\` · \`${prefix}weekly\` · \`${prefix}rescate\` — Ayuda: \`${prefix}ayuda\``,
       '',
       VIRTUAL,
     ].join('\n'));
@@ -91,6 +92,10 @@ export function walletPanel(ctx: GameContext, v: Viewer, activity: { coins: numb
       `🎁 **Diario:** ${ready(b.dailyAt) ? '✅ disponible' : `en ${rel(b.dailyAt)}`}${b.dailyStreak ? ` · racha ${b.dailyStreak} ${b.dailyStreak === 1 ? 'día' : 'días'}` : ''}`,
       `📅 **Semanal:** ${ready(b.weeklyAt) ? '✅ disponible' : `en ${rel(b.weeklyAt)}`}`,
       `🛟 **Rescate:** ${b.rescueAt === null ? `solo con menos de ${coins(cfg.rescue.below)}` : ready(b.rescueAt) ? '✅ disponible' : `en ${rel(b.rescueAt)}`}`,
+      (() => {
+        const w = workStatus(ctx, v.userId);
+        return `🧰 **Trabajo** (\`!work\`): ${w.readyAt ? `en ${rel(w.readyAt)}` : '✅ disponible'} · hoy ${w.todayShifts}/${w.maxPerDay}`;
+      })(),
       `💬 **Actividad hoy:** ${coins(activity.coins)} / ${coins(activity.cap)}${cfg.boost.until > now ? ` · ⚡ boost ×${cfg.boost.activity} hasta ${rel(cfg.boost.until)}` : ''}`,
       '',
       ...(u ? [`-# Apostado ${coins(u.totalWagered)} · ganado ${coins(u.totalWon)} · perdido ${coins(u.totalLost)} · beneficio ${coins(u.netProfit)}`] : []),
