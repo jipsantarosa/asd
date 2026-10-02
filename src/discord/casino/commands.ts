@@ -228,6 +228,7 @@ const top: Command = {
         }
       }
     }
+    await c.defer();
     await c.reply(await topPanel(c.app, c.guild, c.viewer, cat, Math.max(0, page - 1), scope));
   },
 };

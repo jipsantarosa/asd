@@ -19,7 +19,8 @@ export function commandsHash(): string {
  * Registra los comandos de barra.
  * - Con devGuildId: solo en ese servidor (aparecen al instante).
  * - Sin devGuildId: globales, en todos los servidores donde esté el bot.
- * Conserva el comando "Entry Point" de la Actividad (tipo 4): una sobrescritura sin él falla.
+ * Si la aplicación todavía tiene un comando "Entry Point" de Actividades (tipo 4, de la versión anterior),
+ * se conserva: Discord rechaza una sobrescritura que lo omita.
  */
 export async function registerCommands(token: string, clientId: string, devGuildId: string | null): Promise<number> {
   const rest = new REST().setToken(token);
@@ -37,7 +38,7 @@ export async function registerCommands(token: string, clientId: string, devGuild
 
 /**
  * Al arrancar: si los comandos cambiaron desde el último registro, los registra solo.
- * Así los comandos nuevos (/kiss, /avatares, /purgar…) aparecen sin pasos manuales.
+ * Así los comandos nuevos (/casino, los juegos, /torneo, /steal…) aparecen sin pasos manuales.
  */
 export async function autoRegisterCommands(token: string, clientId: string, devGuildId: string | null, dataDir: string): Promise<void> {
   const file = path.join(dataDir, '.comandos-hash');

@@ -2,6 +2,7 @@ import { GameError, fmt, type GameContext } from '../services/context';
 import { checkAchievements, type Unlocked } from './achievements';
 import { casinoDayStart, getCasinoConfig, isGameId, TOURNAMENT_METRICS, type GameId, type TournamentMetric } from './config';
 import { applyTx, assertCoins } from './economy';
+import { assertNotBlocked } from './users';
 
 /**
  * Torneos del casino.
@@ -200,6 +201,7 @@ export function joinTournament(ctx: GameContext, id: number, userId: string): To
   return ctx.db.transaction(() => {
     const t = requireTournament(ctx, id);
     if (t.status !== 'active' && t.status !== 'scheduled') throw new GameError('Ese torneo no está abierto.');
+    assertNotBlocked(ctx, userId);
     const now = ctx.now();
     const exists = ctx.db.get('SELECT 1 FROM casino_tournament_entries WHERE tournament_id = ? AND user_id = ?', id, userId);
     if (exists) throw new GameError('Ya estás en ese torneo.');

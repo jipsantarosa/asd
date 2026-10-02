@@ -1,12 +1,14 @@
-# 🌾 El Valle — bot de Discord
+# 🎰 El Valle Casino — bot de Discord
 
-Granja, pesca de un botón con rarezas, 12 cañas y carnada, logros con insignias y aviso por DM, puntos de actividad, potenciadores temporales, sorteos automáticos, mercado con demanda dinámica, roles interactivos y registros del servidor.
-Además: **besos** con respuesta y contador por pareja, **canales de voz temporales** con interfaz de botones y **moderación completa** (casos, advertencias con escalado, aislamientos, expulsiones, baneos, automod y antiraid).
+Casino **virtual** para servidores de Discord: 10 juegos con botones y animaciones, economía central con estadísticas completas, ranking, torneos automáticos y especiales, logros, azar verificable (*provably fair*) y recompensas por actividad con filtros anti-farming.
 
-> 📋 La auditoría completa (problemas encontrados, arquitectura, decisiones y pruebas) está en [`docs/AUDITORIA.md`](docs/AUDITORIA.md).
-Todo se maneja con paneles (botones, menús y ventanas) dentro de un mismo mensaje, como una app.
+> 🪙 **Toda la economía usa Coins, una moneda interna del bot.** No existe compra, retiro, conversión ni intercambio por dinero real (ni por nada fuera del bot). Los premios, las apuestas, los torneos y los saldos son únicamente virtuales.
 
-Stack: Node.js 22+, TypeScript, discord.js 14, SQLite (better-sqlite3).
+Además conserva lo útil del bot anterior: **besos** con respuesta y contador, **canales de voz temporales** con interfaz, **moderación completa** (casos, escalado, automod y antiraid), **registros** del servidor, **paneles de roles**, historiales de avatares y nombres, **premium** y `!steal` para copiar emojis y stickers.
+
+> 📐 La arquitectura del casino (economía, motor de juegos, azar verificable, datos y decisiones) está en [`docs/CASINO.md`](docs/CASINO.md). La auditoría anterior, en [`docs/AUDITORIA.md`](docs/AUDITORIA.md).
+
+Stack: Node.js 22+, TypeScript, discord.js 14 (≥ 14.19, por Components V2), SQLite (better-sqlite3 o el SQLite de Node).
 
 ---
 
@@ -16,31 +18,29 @@ Stack: Node.js 22+, TypeScript, discord.js 14, SQLite (better-sqlite3).
 2. En **Bot** → **Reset Token** y copiá el token (va en `DISCORD_TOKEN`).
 3. En **Bot → Privileged Gateway Intents** activá:
    - **Server Members Intent**: entradas y salidas, y distinciones.
-   - **Message Content Intent**: comandos con prefijo y registro de mensajes.
-4. (Opcional) En **General Information** está el **Application ID** (`CLIENT_ID`). No hace falta copiarlo: el bot lo saca del token.
-5. Invitá al bot con **OAuth2 → URL Generator**:
+   - **Message Content Intent**: comandos con prefijo, actividad del casino y registro de mensajes.
+4. Invitá al bot con **OAuth2 → URL Generator**:
    - Scopes: `bot` y `applications.commands`.
    - Permisos: Ver canales, Enviar mensajes, Insertar enlaces, Adjuntar archivos, Leer el historial de mensajes, Gestionar canales, Gestionar roles y Ver el registro de auditoría.
+   - Para `!steal`: además **Crear expresiones** (o Gestionar expresiones).
    - Para **canales de voz temporales**: además Conectar y Mover miembros.
    - Para **moderación y automod**: además Gestionar mensajes, Moderar miembros, Expulsar miembros y Banear miembros.
-   - Ubicá el **rol del bot por encima** de los roles que va a entregar (paneles de roles y distinciones) y de los roles de quienes va a moderar.
+   - Ubicá el **rol del bot por encima** de los roles que va a entregar y de los roles de quienes va a moderar.
 
 ## 2. Instalación
 
+En Windows alcanza con abrir **`iniciar.bat`**: instala, compila y arranca el bot (y lo reinicia si se cae). `configurar.bat` guarda el token y los dueños en `.env`.
+
+A mano:
+
 ```bash
 npm install
-cp .env.example .env              # completá DISCORD_TOKEN (CLIENT_ID es opcional)
+cp .env.example .env              # completá DISCORD_TOKEN
 npm run build
-npm run deploy                    # registra los comandos de barra
-npm start
+npm start                         # los comandos de barra se registran solos al conectarse
 ```
 
-Para desarrollo:
-
-- Poné `DEV_GUILD_ID` en `.env`: los comandos aparecen al instante en ese servidor. Sin esa variable se registran globalmente y pueden tardar unos minutos.
-- `npm run deploy:dev` registra los comandos y `npm run dev` recarga el bot al guardar cambios.
-
-Variables de `.env`:
+Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instante en ese servidor) y usá `npm run dev`.
 
 | Variable | Qué es |
 |---|---|
@@ -48,114 +48,99 @@ Variables de `.env`:
 | `CLIENT_ID` | Application ID (opcional: si falta, se deduce del token) |
 | `DEV_GUILD_ID` | (opcional) servidor de pruebas para registrar comandos al instante |
 | `DATABASE_PATH` | Archivo SQLite (por defecto `./data/valle.db`) |
-| `GAME_CONFIG_PATH` | Ajustes globales del juego (por defecto `./game.config.json`) |
 | `DEFAULT_PREFIX` | Prefijo inicial de cada servidor (por defecto `!`) |
+| `OWNER_IDS` | (opcional) dueños del bot: configuran el casino, los saldos, los torneos y el premium. El dueño de la aplicación se detecta solo |
 
 ## 3. Base de datos y migraciones
 
-- **Motor de SQLite:** el bot usa `better-sqlite3` si funciona en tu PC. Si no (por ejemplo, con Node 24 en Windows sin binario compilado), usa automáticamente el SQLite que ya trae Node (22.13 o superior). No hace falta compilar nada, y el archivo de datos es el mismo con cualquiera de los dos.
-- Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada. Cada una se registra en la tabla `schema_migrations`.
-- **Copia de seguridad automática:** una vez por día el bot guarda una copia consistente en `data/backups/valle-AAAA-MM-DD.db` (se conservan las últimas 7). Para restaurar: detené el bot, copiá la que quieras como `data/valle.db` y borrá `valle.db-wal` y `valle.db-shm`.
-- **Copia manual:** detené el bot y copiá los archivos `valle.db`, `valle.db-wal` y `valle.db-shm`.
-- **Migración 2 (nueva pesca):** convierte la caña que tenía cada jugador en las cañas nuevas equivalentes (tier 1 → Sauce, 2 → Tejedora, 3 → Coral, 4 → Brújula, 5 → Abismo, con todas las anteriores incluidas). Los **carretes** y los **permisos de lugares de pesca** ya no existen, así que se **reintegra en monedas** lo pagado (queda registrado en el libro contable) y se devuelve el Mapa de corrientes a quien había abierto la Fosa. Inventario, peces, colección, niveles, XP, granja y monedas se conservan tal cual.
-- **Migración 3 (logros, actividad y tienda):** agrega los puntos de actividad, las estadísticas de logros y la habilidad `actividad` en las distinciones (las ya configuradas se conservan). Reconstruye las estadísticas de los jugadores existentes a partir del registro de pesca, el libro contable y los sorteos ganados, para que los veteranos reciban los logros que ya tenían en su próxima acción (los avisos por DM salen de a 5). A quien ya tenía una caña superior le regala las cañas nuevas intermedias (Corcho, Boya roja, Marea azul, Sigilo).
-- **Migración 6 (respuestas a besos):** crea `kiss_replies`: cada beso se puede corresponder o rechazar una sola vez.
-- **Migración 5 (el lago):** crea `fishing_lakes`, con el lago de cada jugador. No toca datos existentes.
-- **Migración 4 (comunidad):** crea las tablas del historial de avatares y banners (`user_media`) y de los besos (`kiss_pairs`, `kiss_stats`). No toca datos existentes.
-- **Para actualizar:** reemplazá el código, corré `npm install && npm run build && npm run deploy` y reiniciá el bot. Las migraciones nuevas se aplican al arrancar.
-- El bot está pensado para **un solo proceso**. Las protecciones contra carreras (transacciones SQLite y candados en memoria) asumen un único proceso. Para usar *sharding* con varios procesos, primero hay que pasar la base de datos a Postgres.
+- **Motor:** `better-sqlite3` si funciona en tu PC; si no, el SQLite que trae Node (22.13+). El archivo es el mismo con cualquiera de los dos.
+- Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada (tabla `schema_migrations`).
+- **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 100 monedas viejas, sumando servidores, con tope de 25.000).
+- Las migraciones 1 a 9 (granja, pesca, comunidad, premium, besos, voz temporal y moderación) siguen en el código para que cualquier base vieja pueda actualizarse.
+- **Copia de seguridad automática** diaria en `data/backups/valle-AAAA-MM-DD.db` (se guardan 7). Para restaurar: detené el bot, copiá la que quieras como `data/valle.db` y borrá `valle.db-wal` y `valle.db-shm`.
+- El bot está pensado para **un solo proceso** (transacciones SQLite y candados en memoria).
 
-## 4. Configuración del juego
+## 4. El casino
 
-Hay dos niveles de configuración:
+### Economía
 
-1. **Global**, con un archivo `game.config.json` (opcional). Mirá `game.config.example.json`. Pisa cualquier parte del contenido por defecto que está en `src/game/defaults.ts`: moneda, kit inicial, zonas, peces, equipo, precios y valores de `tuning`. Se valida al arrancar, y si hay un valor inválido el bot no inicia y dice cuál es.
-2. **Por servidor**, con `/ajustes` (requiere *Gestionar servidor*). Ahí se cambian unos 50 valores numéricos dentro de rangos seguros: vigor, esperas, multiplicadores de XP y cosecha, cansancio, **pesca** (suerte, vigor por lance y por línea, esperas, líneas máximas, racha de la suerte, precio de la carnada), **eventos** (intervalo mínimo y máximo, duración del sorteo, ganadores, probabilidad de marea dorada, requisitos anti cuentas alternativas y tope de premios por día), curva de niveles, mercado y antispam. También se cambia el prefijo y se activa o desactiva el registro de mensajes enviados. Todo se guarda en la base de datos y sobrevive a los reinicios.
+- **Coins 🪙**, una billetera por persona que vale en todos los servidores donde está el bot. **No hay transferencias entre personas** (así las cuentas alternativas no pueden juntar bonos en una principal).
+- Cada cambio de saldo es una **transacción** con saldo anterior y nuevo, tipo (`BET`, `WIN`, `LOSS`, `PUSH`, `REFUND`, `BONUS`, `ACTIVITY`, `LEVEL_REWARD`, `ACHIEVEMENT_REWARD`, `TOURNAMENT_REWARD`, `TOURNAMENT_ENTRY`, `JACKPOT`, `DROP`, `ADMIN_ADJUSTMENT`…) y, cuando corresponde, una **clave única** que impide pagar dos veces. La base verifica con `CHECK` que cada movimiento cuadre y que ningún saldo sea negativo. `!casino audit` comprueba que la suma de los saldos sea igual a la suma de las transacciones.
+- **Entradas** (configurables por el dueño): saldo inicial 5.000 · `!daily` 1.000 + 10 % por día de racha (hasta +100 %) · `!weekly` 7.500 · `!rescate` 500 si tenés menos de 100 (cada 8 h) · actividad 4–12 por mensaje (tope 600/día) · subir de nivel · logros · torneos.
+- **Salidas:** la ventaja de la casa de cada juego (≈0,5–3,9 %) y las entradas a torneos especiales. El jackpot de Slots sale del 1 % de sus apuestas.
+- **Nivel y rango:** el nivel sube con el **total apostado** (no con lo ganado) y cada nivel paga una recompensa. Rangos: 🥉 Bronce, 🥈 Plata, 🥇 Oro, 💠 Platino, 💎 Diamante, 👑 Leyenda.
+- **Estadísticas por persona:** saldo, total ganado, perdido y apostado, mayor apuesta, mayor premio, mayor multiplicador, partidas, victorias, derrotas, beneficio histórico, racha actual y mejor racha, torneos jugados y ganados, bonos recibidos, fechas de creación y de última actividad; y las mismas por juego.
 
-### Pesca, cañas, carnada, potenciadores y eventos
+### Juegos
 
-Todo esto vive en `src/game/defaults.ts` (`fishing`, `buffs`, `events`, `consumables`) y se puede cambiar desde `game.config.json`.
+| Juego | Comando | Reglas |
+|---|---|---|
+| 🃏 Blackjack | `!bj 100` | 6 mazos, crupier se planta en 17 blando, blackjack 3:2, doblar y dividir |
+| 🎡 Ruleta | `!ruleta 100 rojo` | Europea; color, par/impar, mitades, docenas, columnas, plenos, listas (`7,17,23`) y rangos (`5-12`) |
+| 🎰 Slots | `!slots 100` | 3 rodillos, comodín ⭐, jackpot progresivo con 7️⃣7️⃣7️⃣ |
+| 🚀 Crash | `!crash 500 2.5x` | El multiplicador sube hasta explotar; retiro manual o automático; historial de vuelos recientes |
+| 🔵 Plinko | `!plinko 100 alto 16` | Riesgo bajo/medio/alto, 8 a 16 filas |
+| 💣 Minas | `!minas 100 5` | Tablero 5×5 con 1 a 24 minas (Components V2) |
+| 🐔 Pollo | `!pollo 100 difícil` | 10 carriles cada vez más peligrosos |
+| 🎈 Globos | `!globos 100` | 8 niveles de 6 globos con cada vez más agujas |
+| 🔮 Hilo | `!hilo 100` | Más alta o más baja con mazos reales; lo menos probable paga más; saltar carta |
+| 🐉 Dragon Tower | `!dragon 100 experto` | 9 pisos; fácil, medio, difícil o experto |
 
-- **El lago (el juego de pesca):** el panel muestra 12 casillas de agua, cada una un botón. Tocás dónde tirar (o **🎣 Pescar** para una al azar) y después de cada tiro el lago cambia. Tipos de casilla (configurables en `fishing.tiles`): 🌊 agua (normal), 🫧 burbujas (+25 % suerte, +10 % XP), 🌿 algas (−10 % suerte, 35 % de abono), 🪨 roca (+10 % suerte y objetos perdidos) y 🌀 remolino (máx. 1 por lago: +80 % suerte y Ultralegendario ×2, pero cada línea tiene 35 % de cortarse). Las casillas se guardan en el servidor: un botón modificado no puede inventarse un remolino.
-- **Sin freno anti spam:** la pesca no tiene espera, ni límite de clics, ni el aviso de "procesando". Cada tiro es una transacción de SQLite, así que aunque lleguen muchos clics seguidos, la carnada, el inventario y el saldo quedan exactos. Por defecto tampoco gasta vigor: la carnada es su único costo. Si algún día querés volver a frenarla, en `/ajustes` → **Pesca** se reactivan la espera (`Multiplicador de espera`, `Espera mínima`) y el vigor (`Vigor fijo por pesca`, `Vigor por línea`).
-- **Tiros:** cada tiro lanza tantas **líneas** como permita la caña (más buffs). Cada línea gasta **1 carnada** (salvo ahorro) y hace **una tirada de rareza**. Si falta carnada, se tiran menos líneas; nunca se gasta lo que no hay.
-- **Rarezas por línea (sin suerte):** Común 60 % · No común 26 % · Raro 10 % · Épico 3,2 % · Legendario 0,75 % · **Ultralegendario 0,05 % (1 cada 2.000)**. La suerte multiplica cada rareza por `1 + suerte × factor` (factores 0 / 0,5 / 1 / 1,5 / 2 / 2,5), con un tope de suerte de 0,8: el Ultralegendario llega como mucho a 1 cada 824 tiradas (1 cada 515 con la Caña del abismo).
-- **Aguas:** los peces se desbloquean por nivel de pesca (1, 8, 20, 36, 58). Los nuevos valen más y pesan más en el sorteo, pero los viejos siguen apareciendo.
-- **Carnada:** sale farmeando (0,3–0,6 por cosecha), se compra en el Mercado (el precio sube con el nivel de pesca) y se gana en eventos. Se vende a 1, así que comprarla nunca es negocio por sí sola.
-- **Economía sin límite de clics:** cada tiro deja ganancia neta (el pez esperado vale más que la carnada), así que el ingreso depende de cuánto se pesque. Lo frena la demanda del mercado: vender mucho del mismo pez baja su precio hasta que se recupera. `npm run balance` muestra la ganancia por carnada en cada etapa.
-- **Cañas** (`/mercado` → Cañas), 12 en total, cada una con su sprite en **pixel art** (32×32, con sus colores y su señuelo propio: pececito, rana, boya, cuchara, calamar o estrella):
+- Sin apuesta (`!crash`) muestran las **reglas, la tabla de pagos, los límites y el RTP**. Las apuestas aceptan `1000`, `1.000`, `1k`, `2.5k`, `1m`, `mitad` y `todo`.
+- En los juegos con multiplicador creciente (Crash, Minas, Pollo, Globos, Hilo, Dragon Tower) el multiplicador es **RTP ÷ probabilidad de llegar**: cobrar en cualquier momento vale lo mismo en promedio. Ruleta y Blackjack tienen la ventaja en sus reglas.
+- **Seguridad de las partidas:** cada botón lleva la ronda y su versión; un doble clic o un mensaje viejo no hacen nada. Una sola partida abierta por juego y persona (garantizado por la base). El servidor valida todo: apuesta (entero, mínimo, máximo, saldo), acciones y casillas.
+- **Recuperación:** el estado vive en la base, así que los botones siguen funcionando tras un reinicio. Un Crash en vuelo se resuelve al volver (paga el retiro automático si se alcanzaba; si explotó con el bot prendido, pierde; si no, devuelve). Una partida sin tocar 30 minutos se resuelve sola (cobra lo ganado, se planta o devuelve la apuesta).
+- **Repetir:** los botones 🔁, ×2 y ½ juegan otra ronda igual (una vez por mensaje).
+- **Agregar un juego** (Dice, Baccarat, Keno, Limbo…): un archivo de reglas en `src/casino/games`, su pantalla en `src/discord/casino/games` y una línea en cada registro. Ver `docs/CASINO.md`.
 
-  | Caña | Precio | Pesca nv. | Líneas | Suerte | Ahorro | Espera | Especial |
-  |---|---|---|---|---|---|---|---|
-  | Junco | gratis | 1 | 1 | 0 % | 0 % | 12 s | |
-  | Corcho | 800 | 3 | 1 | 3 % | 8 % | 11 s | |
-  | Sauce llorón | 2.000 | 5 | 2 | 3 % | 0 % | 13 s | |
-  | Tejedora | 6.000 | 9 | 2 | 6 % | 12 % | 12 s | |
-  | Boya roja | 15.000 | 14 | 2 | 9 % | 20 % | 11 s | ahorro |
-  | Coral | 35.000 | 19 | 3 | 10 % | 8 % | 12 s | |
-  | Marea azul | 70.000 | 25 | 3 | 14 % | 12 % | 11 s | |
-  | Relámpago | 120.000 | 30 | 3 | 12 % | 10 % | 7 s | velocidad |
-  | Sigilo del juncal | 220.000 | 37 | 4 | 18 % | 12 % | 11 s | |
-  | Brújula de marea | 400.000 | 45 | 4 | 22 % | 15 % | 10 s | eco 4 % |
-  | Abismo | 800.000 + Mapa | 55 | 5 | 26 % | 15 % | 11 s | ultra ×1,6 |
-  | Astro hundido | 1.800.000 + Celacanto | 70 | 5 | 30 % | 20 % | 9 s | eco 6 % |
+### Azar verificable
 
-  Cada paso sube como mucho +1 línea y +8 % de suerte, y ningún precio salta más de ×3 respecto del anterior.
-- **Potenciadores:** Carnada rendidora, Destello, Festín, Marea alta, Manos rápidas, Rebaja del mercado y Marea dorada (de servidor). Repetirlos **extiende la duración hasta un tope**, nunca apila la potencia. Los de tienda se encarecen con el nivel total y tienen límite diario de compra y de uso.
-- **Racha de la suerte:** 120 tiradas seguidas sin Épico o superior garantizan un Épico.
-- **Colecciones:** premio único al registrar todas las especies de una rareza (de 1.500 a 400.000).
-- **Eventos (`/eventos`):** elegí el canal y activalos. Cada 100–140 min (al azar, configurable) sale un **sorteo** con botón *Participar* (5 min, de 1 a 3 ganadores elegidos solos) o, con un 15 %, una **Marea dorada** para todo el servidor. Premios: monedas (escalan con el nivel), carnada, potenciadores, rebaja del mercado, XP, abono, esencias o un Mapa de corrientes.
-- **Anti abuso en eventos:** cuenta de Discord con 14+ días, 24+ h en el servidor, nivel total 3+, máximo 2 premios por persona por día, una entrada por persona (clave única), un solo sorteo abierto por servidor (índice único) y cierre idempotente: reinicios o ticks repetidos no duplican premios.
+Cada ronda sale de `HMAC-SHA256(semilla_del_servidor, "semilla_del_cliente:nonce:bloque")`. El hash de la semilla del servidor se muestra **antes** de jugar; `!fairness rotar` la revela (con partidas abiertas no se puede) y `!fairness verificar <ronda>` recalcula el resultado. No se usa `Math.random()` para nada que afecte un resultado.
 
-**Verificación matemática:** `npm run balance` calcula valores esperados **exactos** (no simulados). Resumen con el catálogo por defecto:
+### Torneos
 
-| Etapa | Caña | Monedas netas por vigor, pesca / granja | XP de pesca por hora |
-|---|---|---|---|
-| Nivel 1 | Junco | 3,2 / 3,7 (0,86×) | ~730 |
-| Nivel 10 | Tejedora | 9,6 / 11,7 (0,82×) | ~2.350 |
-| Nivel 20 | Coral | 29,2 / 40,4 (0,72×) | ~5.800 |
-| Nivel 36 | Relámpago | 60,5 / 84,7 (0,71×) | ~5.800 |
-| Nivel 45 | Brújula | 74,9 / 84,7 (0,88×) | ~14.000 |
-| Nivel 58 | Abismo | 361 / 499 (0,72×) | ~31.000 |
-| Nivel 80 | Astro | 384 / 602 (0,64×) | ~33.000 |
+- **Automáticos:** uno **diario** y uno **semanal**, con premios fijos y un mínimo de rondas para cobrar. Participás con solo jugar.
+- **Especiales** (dueño del bot): `!torneo create Plinko Weekend juego=plinko metrica=multiplicador duracion=2d premios=50k,25k,10k minbet=100 rondas=20 | descripción`, y luego `!torneo start|edit|stop|cancel|list|leaderboard <id>`. Métricas: beneficio, apostado, multiplicador o victorias. Pueden tener **entrada** (que suma al pozo) y fecha de inicio (`inicio=+2h`).
+- Cerrar un torneo reparte premios una sola vez aunque se repita el cierre. Cancelar devuelve las entradas. Los inicios y cierres se anuncian en el canal de anuncios de cada servidor.
 
-Pescar **nunca rinde más monedas que farmear**, así que no hay un bucle de dinero infinito; a cambio da unas 3 veces más XP y los objetos raros. Todo está limitado por el vigor. Pagar cada caña lleva entre ~3 y ~95 horas de pesca. Los 29 logros juntos pagan ~800.000 monedas una sola vez (unas 16 h de pesca de nivel alto).
+### Actividad (anti-farming)
 
-### Tienda, venta, logros y actividad
+Un mensaje paga solo si no es un comando, tiene al menos 6 letras y 2 palabras reales, no repite (ni casi repite) tus últimos mensajes, no estás mandando ráfagas, pasaron 60 s desde tu última recompensa, tu cuenta tiene más de 7 días y llevás más de 1 h en el servidor. Desde el mensaje 30 del día paga la mitad y desde el 60 un cuarto; la racha de días seguidos suma hasta +50 %; el tope es de 600 por día. El automod corre antes: el spam nunca paga.
 
-- **Tienda unificada** (`src/services/shop.ts`): cada tipo de artículo (cañas, suministros, equipo, permisos, mejoras) es un *proveedor* con `listar` y `comprar`. El precio que se muestra y el que se cobra salen del mismo cálculo (rebajas incluidas), y toda compra pasa por el mismo camino. Para agregar un tipo de artículo nuevo alcanza con un proveedor nuevo.
-- **Vender:** elegís un objeto y ves cuánto pagan por 1, la mitad o todo. La cantidad se resuelve contra el inventario real dentro de la transacción: un doble clic o un panel viejo nunca venden de más. La venta en lote no toca Épicos o mejores, carnada ni materiales de cañas.
-- **Logros** (`achievements` en `defaults.ts`): 29 logros, cada uno con insignia propia en **pixel art** en `assets/badges/`. La forma y el metal indican el nivel (bronce → diamante), el color la categoría, y el ícono (dibujado a mano, 16×16) es único. Al desbloquear uno, el bot manda un **DM** con la insignia, la descripción, la recompensa y el progreso. Con los MD cerrados queda marcado y se ve en `/perfil` → **Logros**. Los errores temporales se reintentan hasta 3 veces, y un barrido cada minuto entrega lo pendiente (también tras un reinicio). Para agregar logros o cañas, editá `defaults.ts` (y el ícono o la paleta en `scripts/pixel-art.py`) y regenerá las imágenes con `python3 scripts/pixel-art.py` (instrucciones en el script).
-- **Actividad:** pescar (2), farmear (2), vender (1), comprar (2), ganar un sorteo (5) y los logros suman puntos. Hay topes diarios: 120 por pesca, 120 por granja, 40 por comercio y 250 en total. Compras y ventas de menos de 50 monedas no suman. Todo se ajusta en `/ajustes` → **Actividad**.
-- **Distinciones por actividad:** en `/roles` → Distinciones, usá la habilidad `actividad` y un umbral en puntos (por ejemplo `2000`). Se entregan solas después de cada acción. El ranking tiene la categoría 🔥 **Actividad**.
+### Administración
 
-### Comandos de barra y permisos
+- **Dueño del bot** (global):
+  - `!casino config` (panel con todo y edición por juego) · `enable|disable <juego|all>` · `minbet|maxbet <juego|all> <n>` · `edge <juego> <%>` · `cooldown <juego> <ms>` · `set <ruta> <valor>`;
+  - `!casino auto daily|weekly on|off|metric|prizes|rounds` · `drop <monto> <personas> [minutos]` (lluvia de monedas) · `boost <x> <horas>`;
+  - `!casino hide|unhide|block|unblock @x` · `audit` · `log [@x]`;
+  - `!balance add|remove|set @x <cantidad> [motivo]`.
+  - Todo queda en el registro administrativo (`!casino log`).
+- **Staff de cada servidor** (`/ajustes`, Gestionar servidor): prefijo, registro de mensajes, **canal de anuncios** del casino (grandes premios, torneos), **canales de juego** (vacío = cualquiera) y Coins por actividad on/off.
 
-- **Registro automático:** al arrancar, el bot compara sus comandos de barra con los últimos registrados y, si cambiaron, los registra solo. Ya no hace falta borrar `data\.comandos-registrados` ni correr `npm run deploy`. Sin `DEV_GUILD_ID`, se registran en **todos** los servidores donde está el bot.
-- **Permisos del bot en cada canal:** Ver canal, Enviar mensajes, Insertar enlaces, Adjuntar archivos y Leer el historial. Si falta alguno, el bot ya no ignora el comando en silencio: avisa en el canal qué permiso falta o, si no puede escribir, te lo manda por DM.
+## 5. Comandos
 
-### Premium (VIP)
+| Comando | Quién | Qué hace |
+|---|---|---|
+| `/casino` · `!casino` | todos | Lobby: saldo, jackpot, torneos y juegos con sus reglas |
+| `/blackjack` `/ruleta` `/slots` `/crash` `/plinko` `/minas` `/pollo` `/globos` `/hilo` `/dragon` | todos | Los 10 juegos (también por prefijo, con alias como `!bj`, `!rl`, `!mines`, `!tower`) |
+| `/balance [usuario]` · `!bal` | todos | Billetera, bonos disponibles y actividad del día |
+| `/daily` · `/weekly` · `/rescate` | todos | Bonos |
+| `/perfil [usuario]` · `!profile` | todos | Perfil con nivel, rango y estadísticas; pestañas de stats, historial y logros |
+| `/top [categoria] [pagina] [servidor]` · `!top 2` · `!top ganancias` | todos | **💰 Richest Players** (por saldo) y categorías secundarias, global o del servidor |
+| `/rank [usuario]` | todos | Puesto en cada ranking |
+| `/stats [juego]` · `/history [juego] [pagina]` | todos | Estadísticas por juego e historial de rondas o movimientos |
+| `/logros` · `/fairness` · `/torneo [id]` | todos | Logros, azar verificable y torneos |
+| `/steal` · `!steal` (respondiendo a un mensaje) · menú **Robar emoji o sticker** | Crear expresiones | Copia emojis o stickers a este servidor |
+| `/kiss` · `/besos` · `/avatares` · `/banners` · `!names` | todos | Comunidad |
+| `/canal` · `/voz` | todos · Gestionar servidor | Canales de voz temporales |
+| `/mod …` · `!warn` `!timeout` `!kick` `!ban` `!unban` `!modlogs` `!caso` · `/automod` | moderación | Moderación |
+| `/purgar` · `!m @x 100` | Gestionar mensajes | Borra mensajes recientes de alguien |
+| `/ajustes` · `/roles` · `/setup` · `/prefijo` · `/ayuda` | según el comando | Configuración y ayuda |
+| `!premium …` | dueño / todos | Premium |
 
-Solo el **dueño del bot** puede darlo: el dueño de la aplicación en el portal de Discord (o los miembros de su equipo), más los IDs en `OWNER_IDS` del `.env`, separados por coma. Quien tiene premium ve **(VIP)** en su `/perfil`.
+Mencionar al bot funciona igual que el prefijo.
 
-- `!premium dar @usuario <1-4> [días]` · `!premium quitar @usuario` · `!premium lista` · `!premium servidores @usuario <n>` (solo el dueño). El premium es **por persona**: lo das desde cualquier servidor y vale en todos los servidores donde esté el bot.
-- `!premium` o `!premium @usuario` muestra el nivel y la tabla de niveles (cualquiera).
-
-| Nivel | Incluye |
-|---|---|
-| 💎 Tier 1 (Booster) | `!clearavatars` (borra tu historial de avatares y banners), `!clearnames`, `!tags` (historial de tags de servidor) |
-| 🌟 Tier 2 | Todo lo del 1 + `!cleartags` + `!mstats` parcial (cuántas personas miraron tus historiales) + `!autoplay` (cada 10 min el bot cosecha y pesca una vez por vos en ese servidor, usando tu vigor y tu carnada; se apaga solo si vence el premium) |
-| 👑 Tier 3 | Todo lo del 2 + `!mstats` completo (las últimas 10 personas que miraron tus avatares, banners, nombres o tags) |
-| 🔮 Tier 4 | Todo lo del 3 + `!ghostmode` (tus vistas a historiales ajenos no se registran y se borran las anteriores) + `!botperfil` (apodo, avatar y banner del bot en hasta 3 servidores donde tengas **Gestionar servidor**; el dueño puede cambiar la cantidad por persona con `!premium servidores`; cada servidor lo personaliza una sola persona) |
-
-- Las limpiezas piden confirmación con botones. Lo actual se vuelve a registrar como único punto de partida.
-- `!mstats`: mirarte a vos mismo no cuenta, y la misma persona mirando lo mismo cuenta una vez cada 10 minutos.
-- **`!names @usuario`** (gratis): historial de @usuario, nombre visible y apodos en el servidor. Los tags de servidor se registran solos (necesitan discord.js 14.21 o superior, que es lo que instala `npm install`).
-- **Migración 9 (besos v2, voz temporal y moderación):** crea `kisses` (cada beso con su estado), `voice_config`, `temp_voice_channels`, `voice_profiles`, `voice_access`, `mod_cases`, `mod_roles` y `automod_config`. No toca datos existentes; los botones de besos viejos siguen funcionando.
-- **Migración 8:** tabla `autoplay` y cantidad de servidores de `!botperfil` por persona.
-- **Migración 7:** tablas `premium`, `user_names`, `history_views` y `bot_profile_slots`. No toca datos existentes.
-
-### Comunidad y moderación
+## 6. Comunidad y premium
 
 - **`!kiss @usuario`:** "**salo** besa a **h**." y abajo, en chico, "salo y h se han besado 9 veces."; después el GIF de anime (apto para todo público, de nekos.best o, si falla, waifu.pics), el nombre del anime y los botones **💋 Corresponder** y **💔 Rechazar** (solo los usa quien recibió el beso).
   - **Corresponder** crea un **mensaje nuevo que responde al original**: "¡h besa a salo de vuelta!", el contador actualizado y **otro GIF**. Los botones del original quedan desactivados.
@@ -165,38 +150,22 @@ Solo el **dueño del bot** puede darlo: el dueño de la aplicación en el portal
 - **`!avs @usuario` / `!banners @usuario`:** muestran un **collage** con todo el historial detectado (el más reciente arriba a la izquierda), un menú para ver cada imagen en grande con su fecha, y **📊 Mis estadísticas** (privado, para quien lo toca). El collage se arma en el bot con un codificador PNG propio, sin librerías nativas. El historial es **solo lo que el bot detectó** desde que existe esta función: cambios de avatar al escribir mensajes, al entrar al servidor o cuando Discord avisa (intent *Server Members*), y banners cuando alguien usa el comando (Discord solo manda el banner si se pide explícitamente). Se guarda el ID del usuario, el hash de la imagen, su URL y las fechas. Las imágenes viejas pueden dejar de estar disponibles en la CDN de Discord con el tiempo.
 - **`!m @usuario 1000`:** borra en el canal actual hasta 1000 mensajes recientes de esa persona (también `/purgar`). Requiere **Gestionar mensajes** en ese canal; no permite limpiar a alguien con un rol igual o superior al tuyo (salvo el dueño). Revisa el historial de a 100 mensajes (hasta 10.000) y borra en bloques de hasta 100. Discord **no permite borrar en bloque mensajes de más de 14 días**: el comando se detiene ahí y lo informa. Nunca borra mensajes fijados. Una sola limpieza a la vez por canal. Queda registrado en el canal de logs.
 - **Permisos del bot:** para `!m`, el rol del bot necesita **Gestionar mensajes** y **Leer el historial de mensajes** en el canal.
+- **`!steal`:** respondé a un mensaje con `!steal` (o pegá los emojis: `!steal <:pepe:123…> [nombre]`). Si hay varios, aparece un menú para elegir hasta 10. Requiere **Crear expresiones** (la persona y el bot), respeta los lugares libres según las mejoras del servidor y descarga solo del CDN de Discord. Los stickers **Lottie** y los oficiales de Discord no se pueden subir (Discord no lo permite): el bot lo avisa en lugar de intentarlo. Copiá solo lo que tengas permiso de usar.
 
-## 5. Comandos
+**Premium** (lo da el dueño del bot; vale en todos los servidores y **no da ventajas en el casino**): `!premium dar @x <1-4> [días]` · `!premium quitar @x` · `!premium lista` · `!premium servidores @x <n>`.
 
-| Slash | Prefijo | Quién | Qué hace |
-|---|---|---|---|
-| `/granja` | `!granja` `!g` | todos | Panel de la granja |
-| `/pesca` | `!pesca` `!p` | todos | Panel de pesca: un botón **🎣 Pescar** |
-| `/mercado [seccion]` | `!mercado` `!tienda` `!shop` | todos | Equipo, suministros, permisos, mejoras, vender |
-| `/inventario` | `!inv` | todos | Mochila con filtros |
-| `/perfil [usuario]` | `!perfil [@usuario]` | todos | Niveles, equipo, colección, distinciones |
-| `/eventos` | `!eventos` | Gestionar servidor | Sorteos automáticos: canal, activar/desactivar, lanzar uno ahora |
-| `/kiss usuario` | `!kiss` `!beso` | todos | Beso con GIF de anime y botones **Corresponder** / **Rechazar**; cuenta los besos de la pareja |
-| `/besos [usuario]` | `!besos` | todos | Besos dados y recibidos, y con quién más |
-| `/canal` | `!canal` `!vc` | todos | Interfaz para manejar tu canal de voz temporal |
-| `/voz` | `!voz` | Gestionar servidor | Configura o repara los canales de voz temporales |
-| `/mod warn·timeout·untimeout·kick·ban·unban` | `!warn` `!timeout` `!untimeout` `!kick` `!ban` `!unban` | moderación (ver §9) | Sanciones con caso numerado, MD y registro |
-| `/mod historial usuario` · `/mod caso numero` | `!historial` `!caso` | moderación | Historial de una persona; ver, editar o anular un caso |
-| `/automod` | `!automod` | Gestionar servidor | Antispam, antiflood, enlaces, antiraid, advertencias y roles de moderación |
-| `/avatares [usuario]` | `!avs` `!avatars` | todos | Collage con el historial de avatares detectados, menú para ver cada uno y **Mis estadísticas** |
-| `/banners [usuario]` | `!banners` `!bns` | todos | Banner actual e historial de banners detectados por el bot |
-| `/purgar usuario cantidad` | `!m @usuario 1000` · `!c` | Gestionar mensajes | Borra hasta 1000 mensajes recientes de esa persona en el canal (con aviso "Buscando mensajes…") |
-| `/top [categoria]` | `!top` | todos | Ranking del servidor (nivel total, granja, pesca, fortuna, colección) |
-| `/jugar` | `!jugar` | todos | Abre El Valle como juego (granja, pesca y top) |
-| `/ayuda` | `!ayuda` | todos | Guía por temas |
-| `/prefijo [nuevo]` | `!prefijo [nuevo]` | ver: todos · cambiar: Gestionar servidor | Prefijo por servidor |
-| `/ajustes` | `!ajustes` | Gestionar servidor | Valores del juego y prefijo |
-| `/roles` | `!roles` | Gestionar roles | Grupos de roles y distinciones |
-| `/setup [rol_staff] [registrar_mensajes]` | `!setup [@rol] [si/no]` | Administrador | Crea o repara los registros |
+| Nivel | Incluye |
+|---|---|
+| 💎 Tier 1 (Booster) | `!clearavatars`, `!clearnames`, `!tags` |
+| 🌟 Tier 2 | Todo lo del 1 + `!cleartags` + `!mstats` parcial |
+| 👑 Tier 3 | Todo lo del 2 + `!mstats` completo |
+| 🔮 Tier 4 | Todo lo del 3 + `!ghostmode` + `!botperfil` |
 
-Mencionar al bot funciona igual que el prefijo (`@El Valle granja`).
+- Las limpiezas piden confirmación con botones. Lo actual se vuelve a registrar como único punto de partida.
+- `!mstats`: mirarte a vos mismo no cuenta, y la misma persona mirando lo mismo cuenta una vez cada 10 minutos.
+- **`!names @usuario`** (gratis): historial de @usuario, nombre visible y apodos en el servidor. Los tags de servidor se registran solos (necesitan discord.js 14.21 o superior, que es lo que instala `npm install`).
 
-## 6. Registros (`/setup`)
+## 7. Registros (`/setup`)
 
 `/setup` crea la categoría **📋 Registros** con estos canales:
 
@@ -227,16 +196,13 @@ Qué hace al ejecutarse:
 - Dos `/setup` simultáneos en el mismo servidor no se pisan: el segundo espera su turno.
 - Si alguien borra un canal de registro, el bot lo olvida y avisa en #sistema.
 
-## 7. Roles (`/roles`)
+## 8. Roles (`/roles`)
 
-- **Grupos:** conjuntos de roles que los miembros eligen solos. Se publican en un canal como un mensaje con un botón, que abre un selector privado con los roles actuales de cada miembro ya marcados.
-  - Modo **libre**: se pueden elegir varios roles.
-  - Modo **único**: se puede tener uno solo.
-  - Se puede exigir un **nivel total mínimo** del juego.
-- **Distinciones:** roles automáticos por nivel de granja, de pesca o total. Se entregan al subir de nivel y al abrir `/perfil`. Nunca se quitan solas.
+- **Grupos:** conjuntos de roles que los miembros eligen solos desde un panel publicado (modo **libre** o **único**). Se puede exigir un **nivel mínimo del casino**.
+- **Distinciones:** roles automáticos al llegar a un **nivel del casino**. Se entregan al subir de nivel y al abrir `/perfil`. Nunca se quitan solas.
 - **Seguridad:** se rechazan @everyone, los roles gestionados por integraciones, los roles por encima del bot y los que tienen permisos de moderación o administración.
 
-## 8. Canales de voz temporales (`/voz`)
+## 9. Canales de voz temporales (`/voz`)
 
 1. `/voz` → **Configurar / reparar**. Crea (o recupera, sin duplicar) la categoría **🔊 Canales temporales**, el canal de voz **➕ Crear canal** y el canal de texto **🎛️・interfaz** con el panel de botones.
 2. Al entrar a **➕ Crear canal**, el bot crea tu canal (con tus ajustes guardados) y te mueve ahí. En el chat de ese canal publica el mismo panel.
@@ -256,11 +222,11 @@ Qué hace al ejecutarse:
 - **Límites:** un canal por persona, 50 por servidor y 10 s entre creaciones. Discord solo deja renombrar un canal 2 veces cada 10 minutos: el bot avisa cuándo se puede de nuevo.
 - **Nombre y límite por defecto:** `/voz` → **Nombre y límite** (`{usuario}` = nombre de quien lo crea).
 
-## 9. Moderación (`/mod`, `/automod`)
+## 10. Moderación (`/mod`, `/automod`)
 
 - **Sanciones:** `/mod warn`, `/mod timeout usuario 10m`, `/mod untimeout`, `/mod kick`, `/mod ban` (también por ID, con opción de borrar mensajes recientes) y `/mod unban ID`. Por prefijo: `!warn @x motivo`, `!timeout @x 1h30m motivo`, `!kick`, `!ban`, `!unban`.
 - **Casos:** cada sanción crea un caso numerado (#1, #2…) con motivo, moderador, duración y fecha. Se publica en el registro de **moderacion** y le llega un MD a la persona: en expulsiones y baneos, antes de aplicarlos.
-- **Historial:** `/mod historial usuario` muestra advertencias activas, aislamientos, expulsiones y baneos, paginado. `/mod caso 12` abre un caso para **editar el motivo** o **anularlo**: un aislamiento vigente se levanta, y una advertencia anulada deja de contar.
+- **Historial:** `/mod historial usuario` (por prefijo `!modlogs @x`) muestra advertencias activas, aislamientos, expulsiones y baneos, paginado. `/mod caso 12` abre un caso para **editar el motivo** o **anularlo**: un aislamiento vigente se levanta, y una advertencia anulada deja de contar.
 - **Jerarquía:** nadie puede sancionar a alguien con un rol igual o más alto, ni al dueño ni al bot. Dos moderadores no pueden sancionar a la misma persona a la vez.
 - **Permisos por roles** (`/automod` → Roles y exenciones):
   - **Moderador:** advertir, aislar e historial.
@@ -275,152 +241,44 @@ Qué hace al ejecutarse:
 - **Antiraid:** 10 entradas en 30 s activan el **modo raid** por 15 min. Según lo que elijas, avisa, aísla o expulsa las cuentas de menos de 7 días, con un resumen en el registro. Se activa o termina a mano desde `/automod`.
 - Todos los valores se cambian en `/automod` con rangos seguros, y los cambios quedan en #sistema.
 
-## 10. El Valle como juego (Actividad dentro de Discord)
-
-Además de los paneles con botones, El Valle se puede jugar como una **Actividad**: un juego visual que se abre dentro de Discord y tiene tres secciones.
-
-- **🌾 Granja:** un campo animado donde las plantas crecen mientras corre la espera, y el botón Farmear. Incluye zonas con sus requisitos, granero, objetos (mate y abono) y equipo.
-- **🎣 Pesca:** un lago animado con un solo botón **Pescar**. Muestra carnada, vigor, racha de la suerte, potenciadores activos y las capturas de cada lance. Pestañas: **Suerte** (probabilidad de cada rareza con tu suerte actual), **Cañas** (equipar las tuyas) y **Colección** (especies descubiertas y premios por rareza).
-- **🏆 Top:** el ranking del servidor por nivel total, granja, pesca, fortuna y colección, con podio y tu posición. Muestra también las **distinciones** (roles por nivel), con tu progreso hacia la próxima.
-
-Todo usa **la misma base de datos y las mismas reglas** que el bot:
-
-- Las esperas, el vigor, el antispam y el candado por usuario son compartidos entre la Actividad y los botones.
-- El servidor decide todos los resultados. Durante la pelea nunca se envía qué pez es: solo el tamaño de su sombra.
-- Al subir de nivel en la Actividad se entregan los roles de distinción.
-
-Cómo se abre:
-
-- Con `/jugar`, que la abre directamente.
-- Desde un canal de voz: tocá el ícono del cohete (**Actividades**) y elegí la app.
-- Desde el perfil de la app, con el botón **Iniciar**, que aparece cuando las Actividades están habilitadas.
-
-### Configuración (una sola vez)
-
-1. **Client Secret:** en el Developer Portal, andá a **OAuth2** → **Reset Secret** y copialo en `.env`:
-   ```
-   CLIENT_SECRET=tu_client_secret
-   ACTIVITY_PORT=3000
-   ```
-2. **Redirect:** en **OAuth2 → Redirects**, agregá `https://127.0.0.1`. Discord pide al menos uno, aunque la Actividad no lo use.
-3. **Túnel HTTPS:** Discord solo carga Actividades por HTTPS público. Desde tu PC podés usar Cloudflare Tunnel:
-   ```powershell
-   winget install --id Cloudflare.cloudflared
-   cloudflared tunnel --url http://localhost:3000
-   ```
-   Copiá la dirección que muestra, por ejemplo `https://algo-raro.trycloudflare.com`.
-4. **URL Mapping:** en **Activities → URL Mappings**, poné `/` en *Prefix* y `algo-raro.trycloudflare.com` en *Target*, sin `https://`.
-5. **Activar:** en **Activities → Settings**, activá **Enable Activities**. Discord crea solo un comando de lanzamiento, y `npm run deploy` lo conserva.
-6. **Instalación:** en **Installation**, dejá habilitado *Guild Install*.
-7. **Compilar y arrancar:**
-   ```powershell
-   npm install
-   npm run build          # compila el bot y la Actividad
-   npm run deploy
-   npm start
-   ```
-   En la consola tiene que aparecer `Actividad de granja escuchando en http://localhost:3000`.
-
-Para abrirla, usá `/jugar` o entrá a un canal de voz → **Actividades** (el ícono del cohete) → tu app.
-
-**Si al tocar la app solo ves su tarjeta de perfil (nombre, etiquetas, un link) y no hay botón "Iniciar", las Actividades no están habilitadas.** Revisá los pasos 4 a 6: primero tiene que existir el URL Mapping y después hay que activar *Enable Activities*. Después de activarlas, cerrá y volvé a abrir Discord (Ctrl + R).
-
-**Importante:** el túnel rápido de Cloudflare cambia de dirección cada vez que lo reiniciás, y en ese caso tenés que actualizar el URL Mapping. Para tener una dirección fija, creá un túnel con nombre en tu cuenta de Cloudflare (gratis) o hosteá el bot en un servidor con dominio propio.
-
-Si usás pm2, podés dejar corriendo el bot y el túnel:
-
-```powershell
-pm2 start dist/index.js --name valle
-pm2 start cloudflared --interpreter none --name tunel -- tunnel --url http://localhost:3000
-pm2 logs tunel     # para ver la dirección del túnel
-```
-
-### Seguridad de la Actividad
-
-- El inicio de sesión usa OAuth2 de Discord. El servidor verifica la cuenta con Discord y entrega un token de sesión propio, que vence a las 12 horas.
-- En cada acción se verifica con el bot que el usuario sea miembro del servidor. Mandar un ID de servidor ajeno da error 403.
-- Hay límite de tamaño y de formato en cada solicitud, antispam compartido con el bot y protección contra leer archivos fuera de la carpeta pública.
-- Si `CLIENT_SECRET` está vacío, la Actividad no se inicia y el bot funciona igual que siempre.
-
 ## 11. Tests
 
 ```bash
 npm test
 ```
 
-Son 207 tests sobre la lógica sin Discord (juego, pesca, tienda, venta, logros, actividad, eventos, besos, canales de voz temporales, moderación, automod, migraciones, copias y API de la Actividad). Cubren:
+Son 178 tests sin Discord real. Cubren, entre otros:
 
-- migraciones repetidas;
-- persistencia del prefijo y los ajustes tras reiniciar;
-- doble clic en granja, compras y pesca;
-- saldo nunca negativo y nivel máximo;
-- el lago: la casilla sale del servidor, índices inválidos, sin carnada no cambia nada, un solo remolino por lago y su tasa de corte; 30 clics seguidos cuadran exacto con la carnada; la espera y el vigor funcionan si se reactivan;
-- pesca: sin carnada o poca carnada, racha de la suerte, colecciones pagadas una sola vez y distribución real de rarezas;
-- potenciadores que vencen, se extienden hasta un tope y no apilan potencia; rebaja aplicada al cobro;
-- eventos duplicados, cierres repetidos, reinicios a mitad de sorteo, tope diario de victorias y eventos huérfanos;
-- la migración de datos de la pesca anterior (conversión de cañas y reintegros) y la migración 3 (estadísticas reconstruidas, distinciones por actividad);
-- tienda: precio mostrado = cobrado (también con rebaja), doble clic, ids manipulados, cantidades y límites diarios;
-- venta: mitad y todo, doble "vender todo", panel desactualizado, más de 9.999 unidades, protecciones de la venta en lote y persistencia en el libro contable;
-- logros pagados una sola vez; avisos por DM sin duplicados, MD cerrados, reintentos y recuperación tras un reinicio; insignias e imágenes presentes;
-- actividad con topes diarios contra el spam, distinciones por puntos y ranking de actividad;
-- besos: el primero muestra 1, el contador es el mismo sin importar quién besa, sobrevive a un reinicio, no pierde ni duplica con 50 besos seguidos y respeta las esperas; corresponder pasa de 9 a 10, un doble clic no suma dos veces, solo responde el destinatario y un id de otro servidor no existe;
-- canales temporales: un dueño, un canal (también con creaciones simultáneas), tope por servidor, transferir y reclamar sin carreras, preferencias, permitidos y bloqueados excluyentes, nombres sin enlaces ni menciones, 2 renombres cada 10 minutos y los permisos del canal nuevo con un servidor simulado;
-- moderación: casos numerados sin repetidos, advertencias que vencen y se anulan, duraciones (`1h30m`, `2 horas`, máximo 28 días), roles por nivel, configuración que no rompe con un JSON inválido y escalado exacto;
-- automod: invitaciones y enlaces (lista blanca, subdominios, dominios parecidos, correos y versiones que no son enlaces), ráfagas, repetidos, memoria acotada y detección de raids;
-- seguridad: una URL mal codificada en la Actividad responde 400 sin tirar el bot, y los inicios de sesión tienen límite; copias de seguridad diarias con retención;
-- historial de avatares y banners sin duplicados, sin historial inventado y con URLs correctas (GIF si es animado);
-- `!m` contra un canal simulado con las reglas de la API: solo el usuario indicado, tope de 1000, bloques de 100, corte a los 14 días, fijados y el propio comando intactos;
-- saturación del mercado y límites diarios;
-- aislamiento entre servidores;
-- el planificador de `/setup` (servidor limpio, repetido, canal borrado, movido o renombrado, base de datos perdida);
-- el antispam y la matemática de balance (probabilidades, rendimiento pesca/granja, precios crecientes de las cañas).
+- **invariantes de la economía:** suma de saldos = suma de transacciones, ningún saldo negativo, cada ronda con un único cierre, lo apostado y lo pagado de cada ronda igual a sus movimientos, y las estadísticas de cada persona iguales a la suma de sus rondas — verificado también con **1.500 rondas al azar** de los 10 juegos;
+- `applyTx`: enteros seguros, signo según el tipo, fondos insuficientes sin cambios, idempotencia y `CHECK` de la base;
+- **doble interacción y botones viejos** (versión de la ronda), partidas de otra persona, una sola partida abierta por juego (también desde dos servidores), espera entre rondas, validación de apuestas y juego cerrado;
+- **devoluciones** (una sola vez, con apuestas extra), partidas abandonadas, Crash interrumpido por un reinicio y retiro tardío;
+- RTP de cada juego: ruleta 36/37, tabla de Slots escalada, P(Crash ≥ x) = RTP/x, tablas de Plinko, valor esperado de cada escalón en Minas, Pollo, Globos y Dragon Tower, Hilo y una simulación de Blackjack;
+- azar verificable (determinismo, rotación, hash, recálculo de rondas reales), tope de premio, jackpot, "repetir" una sola vez;
+- torneos: creación automática idempotente, puntuación, entradas, cancelación con devolución, cierre que paga una sola vez y rondas mínimas;
+- bonos (racha, espera, rescate), actividad anti-farming (cortos, repetidos, ráfagas, espera, tope, rendimiento decreciente, cuentas nuevas, mismo mensaje), lluvias de monedas, rankings y ajustes;
+- **todas las pantallas y paneles** contra los límites de Discord (embeds, filas, botones, `customId` y el máximo de 40 componentes en Components V2);
+- migraciones (una base vieja con granja sube sin perder datos), comandos sin nombres repetidos y slash válidos, `!steal`, besos, voz temporal, moderación, automod, historiales, premium, `/setup` y copias de seguridad.
 
 ## 12. Checklist de verificación en un servidor de prueba
 
-- [ ] `npm run deploy` y los 32 comandos de barra aparecen (incluye `/kiss`, `/besos`, `/canal`, `/voz`, `/mod` y `/automod`).
-- [ ] `!kiss @alguien`: "A besa a B." con "-# A y B se han besado N veces.", GIF, anime y botones. Con la otra cuenta, **Corresponder** → aparece un mensaje nuevo respondiendo al original con "¡B besa a A de vuelta!", N+1 y otro GIF; los botones del original quedan grises. Tocar de nuevo dice que ya fue correspondido.
-- [ ] `/voz` → **Configurar / reparar** dos veces: la segunda no duplica nada. Entrar a ➕ Crear canal crea tu canal y te mueve; salir lo borra.
-- [ ] En tu canal temporal: renombrar (3 veces seguidas: la tercera avisa el límite de Discord), límite, privado (otra cuenta no puede entrar), permitir a esa cuenta (ahora sí), bloquear, transferir, y reclamar desde otra cuenta cuando el dueño se va.
-- [ ] Apagar el bot con un canal temporal vacío y volver a prenderlo: el canal se borra solo.
-- [ ] `/mod warn @alguien spam` ×3 con los valores por defecto: a la tercera queda aislado 60 min (casos #1–#4). `/mod historial` los muestra; `/mod caso 4` → **Anular** le quita el aislamiento.
-- [ ] Con una cuenta sin permisos: `/mod ban` responde que no tiene permiso. Con un rol de moderador configurado en `/automod`, puede `warn` pero no `ban`.
-- [ ] Mandar 7 mensajes en 5 s con una cuenta común: se borran y queda aislada 5 min. Mandar `discord.gg/algo`: se borra con un aviso.
-- [ ] `/pesca`: aparece el lago con 12 casillas; tocar varias casillas seguidas pesca cada vez, sin esperas ni avisos de "procesando", y el lago cambia después de cada tiro.
-- [ ] `/granja` → **Farmear**: suben la XP y la cosecha, baja el vigor. Un doble clic rápido no cosecha dos veces.
-- [ ] Otra persona toca tu panel y recibe "Este panel es de otra persona".
-- [ ] `/pesca` → **🎣 Pescar**: baja la carnada, aparece la captura con su rareza y el pez está en `/inventario`.
-- [ ] Clic muy rápido dos veces en **Pescar**: la segunda dice cuándo estará disponible.
-- [ ] `/mercado` → **Cañas**: elegir la Caña de corcho, ver su imagen y la comparación, comprarla y recibir el DM del logro **Buena madera**.
-- [ ] `/mercado` → **Vender**: elegir un pez → **Vender 1**, **Mitad** y **Todo**. El saldo cambia en el pie del panel; tocar dos veces rápido **Todo** no vende dos veces.
-- [ ] Con los MD cerrados, desbloquear un logro: no llega el DM, y `/perfil` → **Logros** muestra el aviso 📭.
-- [ ] `/roles` → Distinciones: agregar una con habilidad `actividad` y `50` puntos; pescar/farmear hasta pasarlos y verificar que el rol llega solo.
-- [ ] `/top` → categoría 🔥 Actividad.
-- [ ] `!premium dar @alguien 4` (con tu cuenta de dueño) → `/perfil` de esa persona muestra **(VIP)**; con otra cuenta, `!premium dar` responde que solo el dueño puede.
-- [ ] `!names @alguien`, `!tags @alguien` (Tier 1), `!mstats` (Tier 2/3), `!autoplay on` (Tier 2: a los pocos minutos `!autoplay` muestra el primer turno), `!ghostmode` y `!botperfil nombre Prueba` (Tier 4).
-- [ ] `/pesca`: el botón **+10 carnada** compra sin salir del HUD; **Cañas** y **Cebos** abren el Mercado, y **Pesca** vuelve.
-- [ ] `!kiss @alguien` muestra 1; que la otra persona responda con `!kiss` y muestre 2.
-- [ ] `!avs @alguien` y `!banners @alguien` muestran la imagen actual; si cambia el avatar y escribe un mensaje, aparece en el historial.
-- [ ] `!m @alguien 5` en un canal de pruebas: borra 5 de sus mensajes y el aviso se borra solo a los 8 s.
-- [ ] `/mercado` → **Suministros**: comprar un Señuelo brillante, usarlo desde la granja y ver **Destello** en `/pesca`.
-- [ ] `/eventos`: elegir canal → **Lanzar uno ahora** → **Participar** con otra cuenta → a los 5 min se anuncian los ganadores.
-- [ ] Durante una pelea, reiniciar el bot y tocar un botón: la pelea continúa (o expira si pasó el tiempo).
-- [ ] `/mercado`: comprar equipo sin plata o sin nivel da error claro. Vender mucho de lo mismo baja el precio (📉).
-- [ ] `/prefijo ?` → `?granja` funciona. Reiniciar el bot y el prefijo sigue siendo `?`.
-- [ ] `/ajustes` → cambiar "Espera entre cosechas" y ver el cambio al instante. Queda registrado en #sistema.
-- [ ] `/setup` con el bot sin "Gestionar canales": dice qué permiso falta y no crea nada.
-- [ ] `/setup` dos veces seguidas: la segunda no crea canales nuevos.
-- [ ] Borrar #eliminados y mover #baneos fuera de la categoría → `/setup` recrea uno y devuelve el otro.
-- [ ] Una cuenta sin permisos no ve la categoría 📋 Registros. Un admin sí, pero no puede escribir.
-- [ ] Editar y borrar un mensaje, cambiar un apodo, dar un rol, aislar a alguien: cada cosa aparece en su canal.
-- [ ] `/roles` → crear un grupo, agregar roles e intentar agregar un rol con permisos de admin (debe rechazarlo). Publicarlo y elegir roles desde otra cuenta.
-- [ ] Configurar una distinción de nivel total 2 y subir de nivel: el rol se asigna solo.
-- [ ] Nivel máximo: `/ajustes` → Nivel máximo = 10, farmear hasta llegar. Muestra 👑 y no acumula XP.
-- [ ] Hacer clic muy rápido y muchas veces: aparece "Vas muy rápido" y, si se insiste, un aviso en #sistema.
-- [ ] Actividad: abrirla desde un canal de voz, autorizar y cosechar. El panel `/granja` del bot muestra la misma cosecha.
-- [ ] Actividad: con la espera activa, el botón muestra "Creciendo…" y las plantas crecen hasta estar listas.
-- [ ] Actividad: tocar Farmear en el panel del bot y en la Actividad casi a la vez. Solo una cosecha cuenta.
-- [ ] Actividad: elegir una zona bloqueada muestra los requisitos que faltan. Una desbloqueada se puede seleccionar.
-- [ ] Reiniciar el túnel: actualizar el URL Mapping y confirmar que la Actividad vuelve a abrir.
-- [ ] `/jugar` abre el juego. Pestaña **Pesca**: **Pescar**, ver las capturas y revisar las pestañas Suerte, Cañas y Colección.
-- [ ] Pestaña **Top**: aparecés en el ranking y cambiar de categoría actualiza el podio. Las distinciones muestran tu progreso.
-- [ ] `/top` en el chat muestra el mismo ranking y el menú cambia de categoría.
+- [ ] El bot arranca y registra los comandos (aparecen `/casino`, los 10 juegos, `/top`, `/torneo`, `/steal` y el menú **Apps → Robar emoji o sticker**).
+- [ ] `!balance`: 5.000 Coins. `!daily` dos veces: la segunda dice cuándo volver. `!weekly`.
+- [ ] `!casino`: lobby con saldo, jackpot y torneos diario y semanal en curso. El menú muestra las reglas de cada juego.
+- [ ] `!ruleta 100 rojo`, `!slots 100` y `!plinko 100 alto 16`: animación editando el mismo mensaje y resultado con saldo, nivel y logros. **🔁 Repetir** juega otra; tocarlo de nuevo en el mensaje viejo dice que ya se usó.
+- [ ] `!crash 100`: el multiplicador sube; **Retirar** paga. `!crash 100 1.5x`: retira solo en 1,50x. Reiniciar el bot en pleno vuelo con retiro automático: al volver, el mensaje muestra el resultado.
+- [ ] `!minas 100 3`: tablero 5×5; destapar, cobrar; con otra cuenta tocar el tablero → "es de otra persona".
+- [ ] `!bj 100`: pedir, plantarse, doblar y dividir (con un par). Doble clic en **Pedir** no pide dos cartas.
+- [ ] `!pollo`, `!globos`, `!hilo` y `!dragon experto`: avanzar y cobrar; dejar una partida abierta 30 min → se resuelve sola.
+- [ ] `!minas 100` con una partida de minas abierta → ofrece **Retomar partida**.
+- [ ] `!perfil`, `!top`, `!top 2`, `!top ganancias`, botón **Solo este servidor**, `!rank`, `!stats crash`, `!history minas`, `!logros`.
+- [ ] `!fairness` → anotar el hash → jugar → `!fairness rotar` → la semilla revelada tiene ese SHA-256 → `!fairness verificar <ronda>` recalcula el resultado.
+- [ ] Chatear con una cuenta de más de 7 días: `!balance` muestra Coins por actividad; mensajes cortos o repetidos no suman.
+- [ ] `/ajustes`: elegir canal de anuncios y un canal de juegos; jugar en otro canal → indica dónde se juega.
+- [ ] Dueño: `!casino config`, `!casino minbet slots 50`, `!casino disable crash` (→ "cerrado"), `!casino enable crash`, `!casino drop 100 3 5` (otra cuenta agarra), `!balance add @x 1000 premio`, `!casino audit` (✅ cuadra), `!casino log`.
+- [ ] Dueño: `!torneo create Plinko Weekend juego=plinko metrica=multiplicador duracion=1h premios=5000,2500 rondas=2`, `!torneo start <id>`, jugar Plinko, `!torneo <id>`, `!torneo stop <id>` → se anuncia y paga una sola vez.
+- [ ] Sin ser dueño: `!casino config` muestra el lobby y `!balance add` responde que solo el dueño puede.
+- [ ] `!steal` respondiendo a un mensaje con 2 emojis de otro servidor → menú → se agregan. Un sticker Lottie → aviso claro.
+- [ ] `/roles` → distinción de nivel 2 del casino → apostar hasta subir → el rol llega solo.
+- [ ] `!kiss @alguien` → **Corresponder** desde la otra cuenta. `/voz` y un canal temporal. `/mod warn` y `!modlogs @x`.
+- [ ] Clic muy rápido en un juego: hasta 20 acciones cada 10 s; más que eso → "Vas muy rápido".

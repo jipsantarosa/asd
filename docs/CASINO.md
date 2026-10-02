@@ -36,31 +36,39 @@ Documento de diseño de la reestructuración: el bot pasa de granja y pesca a un
 src/
 ├─ casino/                     núcleo (sin discord.js)
 │  ├─ config.ts                CasinoConfig: valores, rangos seguros, guardado y caché
-│  ├─ economy.ts               billeteras y transacciones (applyTx)
+│  ├─ economy.ts               billeteras y transacciones (applyTx) + auditoría
 │  ├─ rng.ts                   provably fair: semillas, HMAC-SHA256, flotantes, mezcla
 │  ├─ users.ts                 perfil del jugador, estadísticas, rachas, niveles y rangos
 │  ├─ engine.ts                CasinoGame + ciclo de ronda: apostar, actuar, liquidar, devolver, abandonar
 │  ├─ leaderboard.ts           top por categoría (global o por servidor) y posición personal
 │  ├─ achievements.ts          catálogo y desbloqueo (con recompensa idempotente)
 │  ├─ tournaments.ts           torneos: creación, puntuación, cierre y premios
-│  ├─ bonus.ts                 diario, semanal y rescate
+│  ├─ bonus.ts                 diario (con racha), semanal y rescate
 │  ├─ activity.ts              recompensas por mensajes (anti-farming)
-│  ├─ events.ts                lluvia de monedas y boost temporal
+│  ├─ events.ts                lluvias de monedas y boost de actividad
 │  ├─ jackpot.ts               pozo progresivo de Slots
+│  ├─ guilds.ts                ajustes del casino por servidor (anuncios, canales de juego, actividad)
+│  ├─ admin.ts                 ajustes de saldo del dueño y registro administrativo
 │  └─ games/                   un archivo por juego + utilidades compartidas
 │     ├─ cards.ts  blackjack.ts  roulette.ts  slots.ts  crash.ts  plinko.ts
 │     ├─ mines.ts  chicken.ts  balloons.ts  hilo.ts  tower.ts
 │     └─ index.ts              registro de juegos (agregar uno = un archivo + una línea)
-└─ discord/casino/             capa de Discord
-   ├─ commands.ts              comandos del casino (slash y prefijo con el mismo código)
-   ├─ handlers.ts              botones y menús (juegos, top, perfil, torneos, admin)
-   ├─ screen.ts                mostrar y animar editando un solo mensaje
-   ├─ games/                   pantalla de cada juego (estado → panel)
-   ├─ crashRunner.ts           vuelo en vivo del Crash
-   ├─ scheduler.ts             torneos automáticos, recuperación, abandono, latido
-   ├─ activity.ts              escucha de mensajes para la actividad
-   ├─ steal.ts                 !steal (emojis y stickers)
-   └─ ui/                      perfil, top, stats, historial, logros, torneos, admin
+└─ discord/
+   ├─ casino/                  capa de Discord del casino
+   │  ├─ commands.ts           juegos (slash y prefijo con el mismo código), lobby, billetera, perfil, top, stats…
+   │  ├─ tournamentCommands.ts !torneo (lista, tabla, unirse; create/edit/start/stop/cancel del dueño)
+   │  ├─ admin.ts              !casino … y !balance add|remove|set (dueño del bot)
+   │  ├─ handlers.ts           botones, menús y ventanas (juegos, lobby, perfil, top, fairness, torneos, lluvias, config)
+   │  ├─ play.ts               flujo de juego: apostar, animar, repetir, Crash en vivo (cola de ediciones), recuperación
+   │  ├─ screen.ts             pantallas (embeds o Components V2) y cómo enviarlas/editarlas
+   │  ├─ format.ts             apuestas escritas a mano, encabezados, resultado y botones comunes
+   │  ├─ games/                pantalla y reglas de cada juego (estado → pantalla)
+   │  ├─ ui/                   lobby, billetera, perfil, top, fairness, torneos y paneles de administración
+   │  ├─ announce.ts           anuncios en el canal de cada servidor (torneos)
+   │  ├─ scheduler.ts          latido, Crash interrumpidos, partidas abandonadas, torneos y lluvias vencidas
+   │  └─ activity.ts           escucha de mensajes para la actividad
+   ├─ commands/steal.ts        !steal, /steal y el menú contextual "Robar emoji o sticker"
+   └─ expressions/steal.ts     reglas de !steal (permisos, lugares, formatos, descarga del CDN)
 ```
 
 ### Agregar un juego nuevo
@@ -176,4 +184,5 @@ El monto es de 4 a 12 Coins por mensaje:
   - `!casino config|enable|disable|minbet|maxbet|edge|cooldown|set|drop|boost|hide|block`;
   - `!balance add|remove|set`.
 - **Servidor** (Gestionar servidor): `/ajustes` → canal de anuncios, canales de juego y actividad.
-- **Utilidades:** `!steal` (respondiendo a un mensaje) y el menú contextual "Robar emoji o sticker".
+- **Utilidades:** `!steal` (respondiendo a un mensaje), `/steal` y el menú contextual "Robar emoji o sticker".
+- **Moderación:** el historial por prefijo pasa a `!modlogs` (libera `!history` para el casino).

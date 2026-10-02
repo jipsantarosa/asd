@@ -11,7 +11,7 @@ import { joinTournament, requireTournament } from '../../casino/tournaments';
 import { GameError } from '../../services/context';
 import { viewerOf, type App, type Panel } from '../app';
 import type { Handler, Ix } from '../handlers/util';
-import { field, update, values } from '../handlers/util';
+import { deferPanel, deferPrivate, field, finishPrivate, update, values } from '../handlers/util';
 import { isOwner } from '../owner';
 import { syncRewardRoles } from '../roleSafety';
 import { cid } from '../ui/ids';
@@ -136,12 +136,15 @@ const lobbyHandler: Handler = async (app, i, id) => {
     }
     case 'open': {
       const what = oneOf(id.args[0], ['wallet', 'profile', 'top', 'tour', 'history'] as const);
+      // El top busca nombres en Discord: se avisa antes para no pasar los 3 s de la interacción.
+      if (what === 'top') await deferPrivate(i);
       const panel = what === 'wallet' ? walletPanel(ctx, v, activityToday(ctx, v.userId))
         : what === 'profile' ? profilePanel(ctx, v, me)
           : what === 'top' ? await topPanel(app, i.guild, v, 'richest', 0, 'g')
             : what === 'history' ? historyPanel(ctx, v, me, 'all', 0)
               : tournamentListPanel(ctx, v, isOwner(v.userId));
       // Desde un panel privado se reemplaza; desde uno público se abre uno privado aparte.
+      if (i.deferred) return finishPrivate(i, '', panel);
       if (i.isMessageComponent() && i.message.flags.has(MessageFlags.Ephemeral)) return update(i, panel);
       return ephemeral(i, panel);
     }
@@ -178,15 +181,18 @@ const lobbyHandler: Handler = async (app, i, id) => {
     }
     case 'topc': {
       const cat = oneOf<TopCategory>(values(i)[0], TOP_CATEGORIES);
+      await deferPanel(i);
       return update(i, await topPanel(app, i.guild, v, cat, 0, oneOf(id.args[0], SCOPES)));
     }
     case 'top': {
       const cat = oneOf<TopCategory>(id.args[0], TOP_CATEGORIES);
+      await deferPanel(i);
       return update(i, await topPanel(app, i.guild, v, cat, int(id.args[1], 'Página'), oneOf(id.args[2], SCOPES)));
     }
     case 'me': {
       const cat = oneOf<TopCategory>(id.args[0], TOP_CATEGORIES);
       const scope = oneOf(id.args[1], SCOPES);
+      await deferPanel(i);
       return update(i, await topPanel(app, i.guild, v, cat, pageOf(app, cat, v.userId, scope === 's' ? i.guildId : null), scope));
     }
     case 'fair': {
@@ -227,12 +233,17 @@ const tournamentHandler: Handler = async (app, i, id) => {
   switch (id.act) {
     case 'list':
       return update(i, tournamentListPanel(ctx, v, isOwner(v.userId)));
-    case 'pick':
-      return update(i, await tournamentPanel(app, i.guild, v, requireTournament(ctx, int(values(i)[0], 'Torneo'))));
+    case 'pick': {
+      const t = requireTournament(ctx, int(values(i)[0], 'Torneo'));
+      await deferPanel(i);
+      return update(i, await tournamentPanel(app, i.guild, v, t));
+    }
     case 'view':
+      await deferPanel(i);
       return update(i, await tournamentPanel(app, i.guild, v, requireTournament(ctx, int(id.args[0], 'Torneo')), Math.max(0, Number(id.args[1]) || 0)));
     case 'join': {
       const t = joinTournament(ctx, int(id.args[0], 'Torneo'), v.userId);
+      await deferPanel(i);
       return update(i, await tournamentPanel(app, i.guild, v, t, 0, `🎟️ ¡Estás adentro de **${t.name}**!`));
     }
     default:

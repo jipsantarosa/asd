@@ -230,6 +230,8 @@ export const tournamentCommand: Command = {
     const ctx = c.app.ctx;
     const owner = isOwner(c.member.id);
     const sub = c.args[0]?.toLowerCase();
+    // Las tablas buscan nombres en Discord y los cierres anuncian en varios servidores: puede tardar más de 3 s.
+    await c.defer();
     if (sub && owner && (await ownerAction(c, sub, c.args.slice(1)))) return;
     if (sub && ['join', 'unirme', 'unirse', 'entrar'].includes(sub)) {
       const t = joinTournament(ctx, idArg(c.args[1]), c.member.id);
