@@ -154,6 +154,8 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 
 Mencionar al bot funciona igual que el prefijo.
 
+**Responder en lugar de mencionar:** en los comandos por prefijo que apuntan a alguien (`!kiss`, `!besos`, `!avs`, `!banners`, `!names`, `!perfil`, `!balance`, `!stats`…), si respondés a un mensaje y no mencionás a nadie, el comando usa al autor de ese mensaje. Ejemplo: responderle a alguien con `!kiss`.
+
 ## 6. Comunidad y premium
 
 - **`!kiss @usuario`:** "**salo** besa a **h**." y abajo, en chico, "salo y h se han besado 9 veces."; después el GIF de anime (apto para todo público, de nekos.best o, si falla, waifu.pics), el nombre del anime y los botones **💋 Corresponder** y **💔 Rechazar** (solo los usa quien recibió el beso).
@@ -265,7 +267,7 @@ Qué hace al ejecutarse:
 npm test
 ```
 
-Son 191 tests sin Discord real. Cubren, entre otros:
+Son 195 tests sin Discord real. Cubren, entre otros:
 
 - **invariantes de la economía:** suma de saldos = suma de transacciones, ningún saldo negativo, cada ronda con un único cierre, lo apostado y lo pagado de cada ronda igual a sus movimientos, y las estadísticas de cada persona iguales a la suma de sus rondas — verificado también con **1.500 rondas al azar** de los 10 juegos;
 - `applyTx`: enteros seguros, signo según el tipo, fondos insuficientes sin cambios, idempotencia y `CHECK` de la base;

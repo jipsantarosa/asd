@@ -25,8 +25,9 @@ export interface CommandContext {
   /** Número entero: slash por nombre, prefijo por posición (acepta "1.000"). */
   int(name: string, index: number): number | null;
   bool(name: string, index: number): boolean | null;
+  /** Miembro: mención o ID. Por prefijo, si falta y el mensaje responde a otro, el autor de ese mensaje. */
   member_(name: string, index: number): Promise<GuildMember | null>;
-  /** Usuario (aunque ya no esté en el servidor): mención o ID. */
+  /** Usuario (aunque ya no esté en el servidor): mención o ID. Por prefijo, si falta y el mensaje responde a otro, el autor de ese mensaje. */
   user_(name: string, index: number): Promise<User | null>;
   role(name: string, index: number): Role | null;
 }
@@ -58,6 +59,14 @@ export function buildContext(opts: {
 }): CommandContext {
   const { interaction, message } = opts;
   const args = opts.args ?? [];
+  // Si el comando por prefijo responde a un mensaje y no nombra a nadie en esa posición, la persona es el autor
+  // del mensaje respondido (p. ej. responder a alguien con "!kiss"). Se busca una sola vez.
+  let replied: Promise<Message | null> | null = null;
+  const repliedMessage = () => {
+    if (!message?.reference?.messageId) return Promise.resolve(null);
+    replied ??= message.fetchReference().catch(() => null);
+    return replied;
+  };
   return {
     app: opts.app,
     guild: opts.member.guild,
@@ -111,13 +120,18 @@ export function buildContext(opts: {
       if (interaction) return interaction.options.getMember(name);
       const m = args[index]?.match(MENTION);
       const id = m?.[1] ?? m?.[2];
-      return id ? opts.member.guild.members.fetch(id).catch(() => null) : null;
+      if (id) return opts.member.guild.members.fetch(id).catch(() => null);
+      if (args[index] !== undefined) return null;
+      const ref = await repliedMessage();
+      return ref ? ref.member ?? (await opts.member.guild.members.fetch(ref.author.id).catch(() => null)) : null;
     },
     async user_(name, index) {
       if (interaction) return interaction.options.getUser(name);
       const m = args[index]?.match(MENTION);
       const id = m?.[1] ?? m?.[2];
-      return id ? opts.app.client.users.fetch(id).catch(() => null) : null;
+      if (id) return opts.app.client.users.fetch(id).catch(() => null);
+      if (args[index] !== undefined) return null;
+      return (await repliedMessage())?.author ?? null;
     },
     role(name, index) {
       if (interaction) return interaction.options.getRole(name);

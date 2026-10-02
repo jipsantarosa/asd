@@ -140,7 +140,7 @@ export const kissCmd: Command = {
     .addUserOption((o) => o.setName('usuario').setDescription('A quién besar').setRequired(true)),
   async run(c) {
     const target = await c.member_('usuario', 0);
-    if (!target) throw new GameError(`Uso: \`${c.prefix}kiss @usuario\``);
+    if (!target) throw new GameError(`Uso: \`${c.prefix}kiss @usuario\` (o respondé a su mensaje con \`${c.prefix}kiss\`).`);
     if (target.user.bot) throw new GameError('Los bots no pueden recibir besos… todavía. 🤖');
     if (target.id === c.member.id) throw new GameError('No te podés besar a vos mismo… ¡probá con alguien más! 💋');
     // Primero se cuenta (atómico, con esperas anti spam) y después se busca el GIF: si la API de GIFs falla, el beso igual cuenta.
