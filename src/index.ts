@@ -19,6 +19,7 @@ import { registerLogEvents } from './discord/logging/events';
 import { startCasino } from './discord/casino/scheduler';
 import { createActivityListener } from './discord/casino/activity';
 import { forgetChannel } from './casino/guilds';
+import { autoSyncLayouts } from './discord/setupMaintenance';
 import path from 'node:path';
 
 async function main(): Promise<void> {
@@ -45,6 +46,8 @@ async function main(): Promise<void> {
   client.once(Events.ClientReady, (c) => {
     logger.info(`Conectado como ${c.user.tag} en ${c.guilds.cache.size} servidores.`);
     void loadOwners(app);
+    // Registros y voz temporal: si esta versión cambió el diseño de los canales, se actualizan solos (sin borrar nada).
+    void autoSyncLayouts(app).catch((err) => logger.warn('Sincronización de canales:', err));
     // Registra los comandos de barra si cambiaron (comandos nuevos aparecen sin pasos manuales).
     void autoRegisterCommands(env.token(), c.application?.id ?? env.clientId(), env.devGuildId, path.dirname(path.resolve(env.databasePath)));
   });

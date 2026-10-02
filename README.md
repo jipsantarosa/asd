@@ -53,8 +53,12 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 ## 3. Base de datos y migraciones
 
+> 🔄 **Al actualizar el bot no hace falta borrar canales a mano.** Si una versión nueva cambia el diseño de los canales de registros o de voz temporal, al arrancar el bot los actualiza solo en cada servidor donde estaban configurados (renombra, mueve y corrige permisos, sin borrar nada) y deja un resumen en el canal de sistema. Lo que sobre de instalaciones viejas se borra con un botón desde `/setup` o `/voz`. Para que esto funcione con los datos, **no borres la carpeta `data/`** al actualizar.
+
 - **Motor:** `better-sqlite3` si funciona en tu PC; si no, el SQLite que trae Node (22.13+). El archivo es el mismo con cualquiera de los dos.
 - Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada (tabla `schema_migrations`).
+- **Migración 12:** guarda la versión del diseño de los canales del bot aplicada en cada servidor (para actualizarlos solos).
+- **Migración 11:** trabajos (`!work`) y economía más dura.
 - **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 1.000 monedas viejas, sumando servidores, con tope de 2.500).
 - Las migraciones 1 a 9 (granja, pesca, comunidad, premium, besos, voz temporal y moderación) siguen en el código para que cualquier base vieja pueda actualizarse.
 - **Copia de seguridad automática** diaria en `data/backups/valle-AAAA-MM-DD.db` (se guardan 7). Para restaurar: detené el bot, copiá la que quieras como `data/valle.db` y borrá `valle.db-wal` y `valle.db-shm`.
@@ -203,6 +207,9 @@ Qué hace al ejecutarse:
   - un canal sacado de la categoría se devuelve;
   - un canal renombrado se conserva, porque se identifica por su ID;
   - si se perdió la base de datos, adopta los canales existentes de la categoría por nombre.
+- **Actualiza:** además de reparar, deja cada canal con el nombre, la descripción, la categoría y los permisos de la versión actual del bot. Los reconoce aunque hayan cambiado emojis, mayúsculas o nombres de versiones anteriores (si alguien los renombró, vuelven al nombre oficial). Nunca los borra: se conserva el historial.
+- **Sobrantes:** si quedaron canales o categorías de registros de instalaciones anteriores, `/setup` los lista y ofrece **🧹 Borrar sobrantes** (con confirmación). Solo toca canales de las categorías de registros que el bot no usa.
+- **♻️ Reinstalar desde cero** (doble confirmación): borra los canales de registro del bot y los vuelve a crear. Se pierde su historial; normalmente no hace falta.
 - Dos `/setup` simultáneos en el mismo servidor no se pisan: el segundo espera su turno.
 - Si alguien borra un canal de registro, el bot lo olvida y avisa en #sistema.
 
@@ -231,6 +238,7 @@ Qué hace al ejecutarse:
 - **Staff:** quien tiene Administrador, Gestionar canales, Moderar miembros o Mover miembros puede manejar cualquier canal temporal y no puede ser expulsado ni bloqueado desde la interfaz.
 - **Límites:** un canal por persona, 50 por servidor y 10 s entre creaciones. Discord solo deja renombrar un canal 2 veces cada 10 minutos: el bot avisa cuándo se puede de nuevo.
 - **Nombre y límite por defecto:** `/voz` → **Nombre y límite** (`{usuario}` = nombre de quien lo crea).
+- **Configurar / reparar también actualiza:** recupera la categoría, el canal para crear y la interfaz aunque se haya perdido la base, les pone el nombre y los permisos del bot de esta versión (sin borrar los permisos que agregó el staff) y deja **un solo panel** en la interfaz (borra los paneles viejos del bot). Las salas temporales huérfanas que quedaron vacías y los hubs o interfaces repetidos aparecen como sobrantes con **🧹 Borrar sobrantes**; las salas con gente nunca se tocan. **♻️ Reinstalar desde cero** recrea el hub y la interfaz.
 
 ## 10. Moderación (`/mod`, `/automod`)
 
@@ -257,7 +265,7 @@ Qué hace al ejecutarse:
 npm test
 ```
 
-Son 184 tests sin Discord real. Cubren, entre otros:
+Son 191 tests sin Discord real. Cubren, entre otros:
 
 - **invariantes de la economía:** suma de saldos = suma de transacciones, ningún saldo negativo, cada ronda con un único cierre, lo apostado y lo pagado de cada ronda igual a sus movimientos, y las estadísticas de cada persona iguales a la suma de sus rondas — verificado también con **1.500 rondas al azar** de los 10 juegos;
 - `applyTx`: enteros seguros, signo según el tipo, fondos insuficientes sin cambios, idempotencia y `CHECK` de la base;
@@ -269,6 +277,7 @@ Son 184 tests sin Discord real. Cubren, entre otros:
 - `!work`: los 5 trabajos, espera compartida, tope diario, desbloqueo por experiencia, multa del hacker sin saldo negativo, cuentas nuevas o suspendidas;
 - bonos (racha, espera, rescate), actividad anti-farming (cortos, repetidos, ráfagas, espera, tope, rendimiento decreciente, cuentas nuevas, mismo mensaje), lluvias de monedas, rankings y ajustes;
 - **todas las pantallas y paneles** contra los límites de Discord (embeds, filas, botones, `customId` y el máximo de 40 componentes en Components V2);
+- sincronización de `/setup` y `/voz`: base perdida, nombres viejos, otra categoría repetida, sobrantes, huérfanos vacíos (y los que tienen gente o están fuera de la categoría no se tocan), versión del diseño;
 - migraciones (una base vieja con granja sube sin perder datos), comandos sin nombres repetidos y slash válidos, `!steal`, besos, voz temporal, moderación, automod, historiales, premium, `/setup` y copias de seguridad.
 
 ## 12. Checklist de verificación en un servidor de prueba

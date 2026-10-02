@@ -1,6 +1,6 @@
 import {
   ChannelType, EmbedBuilder, Events, OverwriteType, PermissionFlagsBits, PermissionsBitField,
-  type CategoryChannel, type Guild, type GuildMember, type Message, type OverwriteResolvable, type PermissionOverwriteOptions,
+  type CategoryChannel, type Guild, type GuildBasedChannel, type GuildMember, type Message, type OverwriteResolvable, type PermissionOverwriteOptions,
   type PermissionsString, type TextChannel, type NewsChannel, type VoiceBasedChannel, type VoiceChannel, type VoiceState,
 } from 'discord.js';
 import { logger } from '../../logger';
@@ -8,8 +8,10 @@ import { KeyedLock } from '../../services/antispam';
 import { GameError } from '../../services/context';
 import {
   CREATE_COOLDOWN_MS, RenameLimiter, creationProblem, forgetTempChannel, getTempChannel, getVoiceConfig, getVoiceProfile, listAccess,
-  listTempChannels, registerTempChannel, renderChannelName, saveVoiceConfig, saveVoiceProfile, tempChannelOf, type VoiceConfig, type VoiceProfile,
+  listTempChannels, planVoiceSync, registerTempChannel, renderChannelName, saveVoiceConfig, saveVoiceProfile, tempChannelOf, VOICE_NAMES,
+  type VoiceConfig, type VoiceExisting, type VoiceProfile,
 } from '../../services/tempVoice';
+import { markSetupVersion } from '../../services/setupVersions';
 import type { App } from '../app';
 import { logSystem, sendLog } from '../logging/sender';
 import { COLORS } from '../ui/theme';
@@ -22,9 +24,10 @@ import { ownerWelcome, voiceInterface } from '../ui/voicePanels';
  * - Al arrancar (y cada 2 minutos) se reconcilia la base con lo que hay en Discord: nada queda colgado tras un reinicio.
  */
 
-export const CATEGORY_NAME = '🔊 Canales temporales';
-export const HUB_NAME = '➕ Crear canal';
-export const INTERFACE_NAME = '🎛️・interfaz';
+export const CATEGORY_NAME = VOICE_NAMES.category.name;
+export const HUB_NAME = VOICE_NAMES.hub.name;
+export const INTERFACE_NAME = VOICE_NAMES.iface.name;
+const INTERFACE_TOPIC = 'Interfaz para manejar tu canal de voz temporal.';
 
 const F = PermissionFlagsBits;
 /** Lo que recibe el dueño en su canal (nunca permisos de gestión: todo pasa por el bot y sus validaciones). */
@@ -341,68 +344,165 @@ export async function postInterface(app: App, guild: Guild, channel: TextChannel
   return channel.send(payload);
 }
 
+function voiceSnapshot(guild: Guild): VoiceExisting[] {
+  return [...guild.channels.cache.values()].map((c) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type === ChannelType.GuildCategory ? 'category' : c.type === ChannelType.GuildVoice ? 'voice' : c.type === ChannelType.GuildText ? 'text' : 'other',
+    parentId: 'parentId' in c ? c.parentId ?? null : null,
+    members: c.isVoiceBased() ? c.members.size : 0,
+  }));
+}
+
+/** Sobrantes de instalaciones anteriores (recalculado en el momento: nunca incluye un canal en uso ni uno con gente). */
+export function duplicateVoiceChannels(app: App, guild: Guild): GuildBasedChannel[] {
+  const conf = getVoiceConfig(app.ctx, guild.id);
+  const temps = new Set(listTempChannels(app.ctx, guild.id).map((t) => t.channelId));
+  const plan = planVoiceSync(conf, voiceSnapshot(guild), temps);
+  const inUse = new Set([conf.categoryId, conf.hubChannelId, conf.interfaceChannelId]);
+  const channels = plan.duplicates.filter((id) => !inUse.has(id)).map((id) => guild.channels.cache.get(id)).filter((c): c is GuildBasedChannel => !!c);
+  const gone = new Set(channels.map((c) => c.id));
+  const cats = plan.duplicateCategories.map((id) => guild.channels.cache.get(id))
+    .filter((c): c is CategoryChannel => c?.type === ChannelType.GuildCategory && c.children.cache.every((ch) => gone.has(ch.id)));
+  return [...channels, ...cats];
+}
+
+export async function deleteVoiceDuplicates(app: App, guild: Guild, executor: string): Promise<number> {
+  await guild.channels.fetch();
+  let n = 0;
+  const list = duplicateVoiceChannels(app, guild);
+  for (const c of [...list].sort((a, b) => Number(a.type === ChannelType.GuildCategory) - Number(b.type === ChannelType.GuildCategory))) {
+    // Un canal de voz pudo llenarse entre medio: se vuelve a mirar justo antes de borrar.
+    if (c.isVoiceBased() && c.members.size > 0) continue;
+    if (await c.delete(`Sobrante de canales temporales (por ${executor})`).then(() => true).catch(() => false)) n += 1;
+  }
+  return n;
+}
+
+/** Borra el canal para crear y la interfaz (los canales temporales con gente no se tocan) y los vuelve a crear. */
+export async function reinstallTempVoice(app: App, guild: Guild, executor: string): Promise<{ report: string[]; duplicates: number }> {
+  await guild.channels.fetch();
+  const conf = getVoiceConfig(app.ctx, guild.id);
+  const reason = `Reinstalación de canales temporales (por ${executor})`;
+  for (const id of [conf.hubChannelId, conf.interfaceChannelId]) {
+    const c = id ? guild.channels.cache.get(id) : undefined;
+    if (c && !(c.isVoiceBased() && c.members.size > 0)) await c.delete(reason).catch(() => undefined);
+  }
+  await deleteVoiceDuplicates(app, guild, executor);
+  saveVoiceConfig(app.ctx, guild.id, { hubChannelId: null, interfaceChannelId: null, interfaceMessageId: null });
+  return setupTempVoice(app, guild, executor);
+}
+
 /**
- * Crea o repara todo sin duplicar: categoría, canal para crear y canal de interfaz (con su mensaje).
- * Los IDs se guardan en la base; por nombre solo se adoptan canales que ya estén en la categoría.
+ * Crea, repara y sincroniza todo con el diseño de esta versión, sin duplicar:
+ * - encuentra la categoría, el canal para crear y la interfaz por ID guardado o, si se perdió la base, por nombre
+ *   (también por nombres de versiones anteriores, sin importar emojis ni mayúsculas);
+ * - les pone el nombre, la descripción y los permisos del bot actuales (sin pisar los permisos que agregó el staff);
+ * - deja un solo panel de interfaz (borra los paneles viejos del bot en ese canal);
+ * - informa sobrantes (hubs o interfaces repetidos, salas temporales huérfanas vacías): solo se borran si alguien confirma.
  */
-export async function setupTempVoice(app: App, guild: Guild, executor: string): Promise<string[]> {
+export async function setupTempVoice(app: App, guild: Guild, executor: string, opts: { auto?: boolean } = {}): Promise<{ report: string[]; duplicates: number }> {
   const missing = missingVoicePerms(guild);
   if (missing.length) throw new GameError(`Me faltan permisos: **${missing.join('**, **')}**. Dámelos y volvé a intentar.`);
   await guild.channels.fetch();
   const conf = getVoiceConfig(app.ctx, guild.id);
+  const temps = new Set(listTempChannels(app.ctx, guild.id).map((t) => t.channelId));
+  const plan = planVoiceSync(conf, voiceSnapshot(guild), temps);
   const reason = `Canales temporales (/voz por ${executor})`;
   const report: string[] = [];
   const me = guild.members.me!;
-
-  let category = conf.categoryId ? guild.channels.cache.get(conf.categoryId) : undefined;
-  if (category?.type !== ChannelType.GuildCategory) {
-    category = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === CATEGORY_NAME);
-    if (category) report.push(`🔧 Categoría <#${category.id}> recuperada`);
-    else {
-      category = await guild.channels.create({ name: CATEGORY_NAME, type: ChannelType.GuildCategory, reason });
-      report.push(`🆕 Categoría **${CATEGORY_NAME}** creada`);
+  const rename = async (ch: GuildBasedChannel, name: string, what: string[]) => {
+    if (ch.name !== name) {
+      const old = ch.name;
+      await ch.setName(name, reason);
+      what.push(`renombrado (antes \`${old}\`)`);
     }
-  } else report.push(`✅ Categoría <#${category.id}> correcta`);
-  const cat = category as CategoryChannel;
+  };
 
-  let hub = conf.hubChannelId ? guild.channels.cache.get(conf.hubChannelId) : undefined;
-  if (hub?.type !== ChannelType.GuildVoice) {
-    hub = cat.children.cache.find((c) => c.type === ChannelType.GuildVoice && c.name === HUB_NAME);
-    if (hub) report.push(`🔧 <#${hub.id}> recuperado`);
-    else {
-      hub = await guild.channels.create({
-        name: HUB_NAME, type: ChannelType.GuildVoice, parent: cat.id, reason,
-        // Nadie habla en el hub: solo se entra para que el bot cree tu canal.
-        permissionOverwrites: [
-          { id: guild.id, type: OverwriteType.Role, deny: [F.Speak, F.Stream] },
-          { id: me.id, type: OverwriteType.Member, allow: grantable(guild, cat, BOT_ALLOW) },
-        ],
-      });
-      report.push(`🆕 <#${hub.id}> creado`);
+  let cat: CategoryChannel;
+  if (plan.category.kind === 'create') {
+    cat = await guild.channels.create({ name: CATEGORY_NAME, type: ChannelType.GuildCategory, reason });
+    report.push(`🆕 Categoría **${CATEGORY_NAME}** creada`);
+  } else {
+    cat = guild.channels.cache.get(plan.category.id) as CategoryChannel;
+    const what: string[] = [];
+    await rename(cat, CATEGORY_NAME, what);
+    report.push(`${what.length || plan.category.kind === 'adopt' ? '🔧' : '✅'} Categoría <#${cat.id}> ${what.length ? what.join(', ') : plan.category.kind === 'adopt' ? 'recuperada' : 'correcta'}`);
+  }
+
+  // Permisos del bot y de @everyone en el hub y la interfaz: se actualizan sin borrar los que agregó el staff.
+  const hubPerms = async (ch: VoiceChannel) => {
+    await ch.permissionOverwrites.edit(guild.id, { Speak: false, Stream: false }, { reason });
+    await ch.permissionOverwrites.edit(me.id, Object.fromEntries(new PermissionsBitField(grantable(guild, cat, BOT_ALLOW)).toArray().map((p) => [p, true])), { reason });
+  };
+  const ifacePerms = async (ch: TextChannel) => {
+    await ch.permissionOverwrites.edit(guild.id, { SendMessages: false, CreatePublicThreads: false, CreatePrivateThreads: false, AddReactions: false }, { reason });
+    await ch.permissionOverwrites.edit(me.id, { ViewChannel: true, SendMessages: true, EmbedLinks: true, ReadMessageHistory: true }, { reason });
+  };
+
+  let hub: VoiceChannel;
+  if (plan.hub.kind === 'create') {
+    hub = await guild.channels.create({
+      name: HUB_NAME, type: ChannelType.GuildVoice, parent: cat.id, reason,
+      // Nadie habla en el hub: solo se entra para que el bot cree tu canal.
+      permissionOverwrites: [
+        { id: guild.id, type: OverwriteType.Role, deny: [F.Speak, F.Stream] },
+        { id: me.id, type: OverwriteType.Member, allow: grantable(guild, cat, BOT_ALLOW) },
+      ],
+    });
+    report.push(`🆕 <#${hub.id}> creado`);
+  } else {
+    hub = guild.channels.cache.get(plan.hub.id) as VoiceChannel;
+    const what: string[] = [];
+    if (hub.parentId !== cat.id) {
+      await hub.setParent(cat.id, { lockPermissions: false, reason });
+      what.push('movido a la categoría');
     }
-  } else report.push(`✅ <#${hub.id}> correcto`);
+    await rename(hub, HUB_NAME, what);
+    await hubPerms(hub);
+    report.push(`${what.length || plan.hub.kind === 'adopt' ? '🔧' : '✅'} <#${hub.id}> ${what.length ? what.join(', ') : plan.hub.kind === 'adopt' ? 'recuperado' : 'correcto'}`);
+  }
 
-  let iface = conf.interfaceChannelId ? guild.channels.cache.get(conf.interfaceChannelId) : undefined;
-  if (iface?.type !== ChannelType.GuildText) {
-    iface = cat.children.cache.find((c) => c.type === ChannelType.GuildText && c.name === INTERFACE_NAME);
-    if (iface) report.push(`🔧 <#${iface.id}> recuperado`);
-    else {
-      iface = await guild.channels.create({
-        name: INTERFACE_NAME, type: ChannelType.GuildText, parent: cat.id, reason, topic: 'Interfaz para manejar tu canal de voz temporal.',
-        // Solo lectura: el canal es para los botones, no para charlar.
-        permissionOverwrites: [
-          { id: guild.id, type: OverwriteType.Role, deny: [F.SendMessages, F.CreatePublicThreads, F.CreatePrivateThreads, F.AddReactions] },
-          { id: me.id, type: OverwriteType.Member, allow: [F.ViewChannel, F.SendMessages, F.EmbedLinks, F.ReadMessageHistory] },
-        ],
-      });
-      report.push(`🆕 <#${iface.id}> creado`);
+  let iface: TextChannel;
+  if (plan.iface.kind === 'create') {
+    iface = await guild.channels.create({
+      name: INTERFACE_NAME, type: ChannelType.GuildText, parent: cat.id, reason, topic: INTERFACE_TOPIC,
+      // Solo lectura: el canal es para los botones, no para charlar.
+      permissionOverwrites: [
+        { id: guild.id, type: OverwriteType.Role, deny: [F.SendMessages, F.CreatePublicThreads, F.CreatePrivateThreads, F.AddReactions] },
+        { id: me.id, type: OverwriteType.Member, allow: [F.ViewChannel, F.SendMessages, F.EmbedLinks, F.ReadMessageHistory] },
+      ],
+    });
+    report.push(`🆕 <#${iface.id}> creado`);
+  } else {
+    iface = guild.channels.cache.get(plan.iface.id) as TextChannel;
+    const what: string[] = [];
+    if (iface.parentId !== cat.id) {
+      await iface.setParent(cat.id, { lockPermissions: false, reason });
+      what.push('movido a la categoría');
     }
-  } else report.push(`✅ <#${iface.id}> correcto`);
+    await rename(iface, INTERFACE_NAME, what);
+    if (iface.topic !== INTERFACE_TOPIC) {
+      await iface.setTopic(INTERFACE_TOPIC, reason);
+      what.push('descripción actualizada');
+    }
+    await ifacePerms(iface);
+    report.push(`${what.length || plan.iface.kind === 'adopt' ? '🔧' : '✅'} <#${iface.id}> ${what.length ? what.join(', ') : plan.iface.kind === 'adopt' ? 'recuperado' : 'correcto'}`);
+  }
 
-  saveVoiceConfig(app.ctx, guild.id, { enabled: true, categoryId: cat.id, hubChannelId: hub.id, interfaceChannelId: iface.id });
+  // A mano se activa; la sincronización automática respeta si el staff lo había desactivado.
+  saveVoiceConfig(app.ctx, guild.id, { enabled: opts.auto ? conf.enabled : true, categoryId: cat.id, hubChannelId: hub.id, interfaceChannelId: iface.id });
   const sameChannel = conf.interfaceChannelId === iface.id;
-  const msg = await postInterface(app, guild, iface as TextChannel, sameChannel ? conf.interfaceMessageId : null);
+  const msg = await postInterface(app, guild, iface, sameChannel ? conf.interfaceMessageId : null);
   saveVoiceConfig(app.ctx, guild.id, { interfaceMessageId: msg.id });
-  report.push(`🎛️ Interfaz ${sameChannel && conf.interfaceMessageId === msg.id ? 'actualizada' : 'publicada'} en <#${iface.id}>`);
-  return report;
+  // Un solo panel: los paneles viejos del bot en la interfaz (de instalaciones anteriores) se borran.
+  const old = await iface.messages.fetch({ limit: 50 }).catch(() => null);
+  const stale = old ? [...old.values()].filter((m) => m.author.id === me.id && m.id !== msg.id) : [];
+  for (const m of stale) await m.delete().catch(() => undefined);
+  report.push(`🎛️ Interfaz ${sameChannel && conf.interfaceMessageId === msg.id ? 'actualizada' : 'publicada'} en <#${iface.id}>${stale.length ? ` (borré ${stale.length} ${stale.length === 1 ? 'panel viejo' : 'paneles viejos'})` : ''}`);
+  markSetupVersion(app.ctx, guild.id, 'voice');
+
+  const dups = duplicateVoiceChannels(app, guild);
+  if (dups.length) report.push(`\n🧹 Hay **${dups.length}** ${dups.length === 1 ? 'canal sobrante' : 'canales sobrantes'} de instalaciones anteriores: ${dups.slice(0, 10).map((c) => `<#${c.id}>`).join(' ')}. Podés borrarlos con el botón de abajo.`);
+  return { report, duplicates: dups.length };
 }

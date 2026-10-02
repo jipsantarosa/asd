@@ -28,6 +28,7 @@ import { publicGroupMessage, rolePicker, rolesAdminPanel } from '../ui/rolesPane
 import { settingsPanel } from '../ui/settingsPanel';
 import { CASINO_HANDLERS } from '../casino/handlers';
 import { stealHandler } from '../commands/steal';
+import { maintenanceHandler } from '../setupMaintenance';
 import { deferPanel, field, update, values, type Handler as UiHandler, type Ix } from './util';
 import { voiceAdminHandler, voiceHandler } from './voice';
 import { automodHandler, modHandler } from './moderation';
@@ -418,5 +419,6 @@ export const HANDLERS: Record<string, Handler> = {
   ra: rolesAdminHandler,
   rp: rolesPublicHandler,
   cx: stealHandler,
+  sy: maintenanceHandler,
   ...CASINO_HANDLERS,
 };

@@ -289,3 +289,70 @@ export class RenameLimiter {
     for (const [k, v] of this.hits) if (v.every((t) => now - t >= this.windowMs)) this.hits.delete(k);
   }
 }
+
+// ───────────────────────── Sincronización de /voz (planificador puro, testeable) ─────────────────────────
+
+export const VOICE_NAMES = {
+  category: { name: '🔊 Canales temporales', legacy: ['Canales temporales', 'Voz temporal', 'Temporales'] },
+  hub: { name: '➕ Crear canal', legacy: ['Crear canal', 'Crear sala', 'Unite para crear'] },
+  iface: { name: '🎛️・interfaz', legacy: ['interfaz', 'panel-voz', 'interfaz-voz'] },
+} as const;
+
+/** Nombre comparable: sin emojis, separadores, acentos ni mayúsculas ("➕ Crear canal" → "crear-canal"). */
+export function normalizeName(name: string): string {
+  return name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+}
+
+const matches = (part: keyof typeof VOICE_NAMES, name: string) =>
+  [VOICE_NAMES[part].name, ...VOICE_NAMES[part].legacy].map(normalizeName).includes(normalizeName(name));
+
+export interface VoiceExisting {
+  id: string;
+  name: string;
+  type: 'category' | 'voice' | 'text' | 'other';
+  parentId: string | null;
+  /** Personas conectadas (canales de voz). */
+  members: number;
+}
+
+export type VoicePick = { kind: 'keep' | 'adopt'; id: string } | { kind: 'create' };
+
+export interface VoicePlan {
+  category: VoicePick;
+  hub: VoicePick;
+  iface: VoicePick;
+  /** Sobrantes: hubs o interfaces repetidos y canales de voz vacíos que no son temporales registrados (huérfanos). */
+  duplicates: string[];
+  /** Otras categorías de voz temporal (se borran solo si quedan vacías). */
+  duplicateCategories: string[];
+}
+
+export function planVoiceSync(conf: Pick<VoiceConfig, 'categoryId' | 'hubChannelId' | 'interfaceChannelId'>, existing: VoiceExisting[], tempIds: Set<string>): VoicePlan {
+  const byId = new Map(existing.map((c) => [c.id, c]));
+  const cats = existing.filter((c) => c.type === 'category' && matches('category', c.name));
+  const stored = conf.categoryId ? byId.get(conf.categoryId) : undefined;
+  let category: VoicePick;
+  if (stored?.type === 'category') category = { kind: 'keep', id: stored.id };
+  else {
+    const kids = (id: string) => existing.filter((c) => c.parentId === id).length;
+    const best = [...cats].sort((a, b) => kids(b.id) - kids(a.id))[0];
+    category = best ? { kind: 'adopt', id: best.id } : { kind: 'create' };
+  }
+  const catId = category.kind === 'create' ? null : category.id;
+  const zone = new Set([...(catId ? [catId] : []), ...cats.map((c) => c.id)]);
+  const inZone = (c: VoiceExisting) => c.parentId !== null && zone.has(c.parentId);
+  const pick = (storedId: string | null, type: 'voice' | 'text', part: 'hub' | 'iface'): VoicePick => {
+    const s = storedId ? byId.get(storedId) : undefined;
+    if (s?.type === type) return { kind: 'keep', id: s.id };
+    const found = existing.filter((c) => c.type === type && inZone(c) && matches(part, c.name) && !tempIds.has(c.id))
+      .sort((a, b) => Number(b.parentId === catId) - Number(a.parentId === catId))[0];
+    return found ? { kind: 'adopt', id: found.id } : { kind: 'create' };
+  };
+  const hub = pick(conf.hubChannelId, 'voice', 'hub');
+  const iface = pick(conf.interfaceChannelId, 'text', 'iface');
+  const used = new Set([hub, iface].flatMap((p) => (p.kind === 'create' ? [] : [p.id])));
+  const duplicates = existing.filter((c) => inZone(c) && !used.has(c.id) && !tempIds.has(c.id) && (
+    (c.type === 'voice' && c.members === 0) || (c.type === 'text' && matches('iface', c.name))
+  )).map((c) => c.id);
+  return { category, hub, iface, duplicates, duplicateCategories: cats.filter((c) => c.id !== catId).map((c) => c.id) };
+}

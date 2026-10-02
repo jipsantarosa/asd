@@ -1,10 +1,11 @@
 import {
   ChannelType, EmbedBuilder, OverwriteType, PermissionFlagsBits, PermissionsBitField, type CategoryChannel, type Guild,
-  type OverwriteResolvable, type Role, type TextChannel,
+  type GuildBasedChannel, type OverwriteResolvable, type Role, type TextChannel,
 } from 'discord.js';
 import { logger } from '../../logger';
 import type { GameContext } from '../../services/context';
 import { ensureSettings } from '../../services/guildSettings';
+import { markSetupVersion } from '../../services/setupVersions';
 import {
   CATEGORY_NAME, LOG_CHANNELS, getLogConfig, planSetup, saveLogConfig, type ExistingChannel, type LogConfig, type LogKey,
 } from '../../services/logConfig';
@@ -76,17 +77,28 @@ export interface SetupOptions {
   executorTag: string;
 }
 
+export interface SetupResult {
+  embed: EmbedBuilder;
+  /** Canales y categorías sobrantes de instalaciones anteriores (para ofrecer borrarlos). */
+  duplicates: number;
+  ok: boolean;
+}
+
 /**
- * Configura o repara el sistema de registros. Es idempotente: ejecutarlo varias veces no
- * duplica canales. Los IDs se guardan en la base de datos; los nombres solo se usan para
- * adoptar canales huérfanos dentro de la categoría (p. ej. si se perdió la BD).
+ * Configura, repara y sincroniza el sistema de registros con el diseño de esta versión del bot, sin duplicar:
+ * - encuentra sus canales por ID guardado o, si se perdió la base, por nombre (también por nombres de versiones anteriores);
+ * - los deja con el nombre, la descripción, la categoría y los permisos actuales (sin borrarlos: se conserva el historial);
+ * - informa los canales sobrantes de instalaciones anteriores, que solo se borran si alguien lo confirma.
  */
-export async function runSetup(ctx: GameContext, guild: Guild, opts: SetupOptions): Promise<EmbedBuilder> {
+export async function runSetup(ctx: GameContext, guild: Guild, opts: SetupOptions): Promise<SetupResult> {
   ensureSettings(ctx, guild.id);
   const missing = missingSetupPermissions(guild);
   if (missing.length) {
-    return new EmbedBuilder().setColor(COLORS.error).setTitle('❌ Me faltan permisos')
-      .setDescription(`Para configurar los registros necesito:\n${missing.map((m) => `• ${m}`).join('\n')}\n\nDámelos (o un rol que los tenga) y volvé a ejecutar \`/setup\`.`);
+    return {
+      ok: false, duplicates: 0,
+      embed: new EmbedBuilder().setColor(COLORS.error).setTitle('❌ Me faltan permisos')
+        .setDescription(`Para configurar los registros necesito:\n${missing.map((m) => `• ${m}`).join('\n')}\n\nDámelos (o un rol que los tenga) y volvé a ejecutar \`/setup\`.`),
+    };
   }
 
   await guild.channels.fetch();
@@ -105,8 +117,13 @@ export async function runSetup(ctx: GameContext, guild: Guild, opts: SetupOption
     report.push(`🆕 Categoría **${CATEGORY_NAME}** creada`);
   } else {
     category = guild.channels.cache.get(plan.category.id) as CategoryChannel;
+    const changes: string[] = [];
+    if (category.name !== CATEGORY_NAME) {
+      await category.setName(CATEGORY_NAME, reason);
+      changes.push('renombrada');
+    }
     await category.permissionOverwrites.set(overwrites, reason);
-    report.push(`🔧 Categoría <#${category.id}> ${plan.category.kind === 'adopt' ? 'recuperada' : 'verificada'} y permisos corregidos`);
+    report.push(`🔧 Categoría <#${category.id}> ${plan.category.kind === 'adopt' ? 'recuperada' : 'verificada'}${changes.length ? ` y ${changes.join(', ')}` : ''}`);
   }
 
   const result: LogConfig = { categoryId: category.id, staffRoleId, logSentMessages: opts.logSentMessages, channels: {} };
@@ -119,18 +136,33 @@ export async function runSetup(ctx: GameContext, guild: Guild, opts: SetupOption
         report.push(`🆕 <#${ch.id}> creado`);
       } else {
         ch = guild.channels.cache.get(step.channelId) as TextChannel;
-        if (step.kind === 'reparent') await ch.setParent(category.id, { lockPermissions: false, reason });
+        // Sincronizar con el diseño actual: categoría, nombre, descripción y permisos.
+        const changes: string[] = [];
+        if (ch.parentId !== category.id) {
+          await ch.setParent(category.id, { lockPermissions: false, reason });
+          changes.push('movido a la categoría');
+        }
+        if (ch.name !== def.name) {
+          const old = ch.name;
+          await ch.setName(def.name, reason);
+          changes.push(`renombrado (antes \`${old}\`)`);
+        }
+        if (ch.topic !== def.topic) {
+          await ch.setTopic(def.topic, reason);
+          changes.push('descripción actualizada');
+        }
         await ch.permissionOverwrites.set(overwrites, reason);
-        if (!ch.topic) await ch.setTopic(def.topic, reason);
-        report.push(step.kind === 'keep' ? `✅ <#${ch.id}> correcto` : `🔧 <#${ch.id}> ${step.kind === 'adopt' ? 'recuperado' : 'devuelto a la categoría'}`);
+        const label = step.kind === 'adopt' ? 'recuperado' : step.kind === 'reparent' ? 'devuelto a la categoría' : 'correcto';
+        report.push(`${changes.length || step.kind !== 'keep' ? '🔧' : '✅'} <#${ch.id}> ${changes.length ? changes.join(', ') : label}`);
       }
-      result.channels[step.key as LogKey] = ch.id;
+      result.channels[step.key] = ch.id;
     } catch (err) {
       logger.warn(`/setup: fallo en ${step.key} (${guild.id}):`, err);
       errors.push(`❌ ${def.name}: ${(err as Error).message}`);
     }
   }
   saveLogConfig(ctx, guild.id, result);
+  markSetupVersion(ctx, guild.id, 'logs');
 
   // Verificación final: el bot debe poder escribir en cada canal guardado.
   const me = guild.members.me!;
@@ -138,17 +170,63 @@ export async function runSetup(ctx: GameContext, guild: Guild, opts: SetupOption
     const ch = guild.channels.cache.get(id!);
     if (!ch || !ch.permissionsFor(me).has(new PermissionsBitField(BOT_ALLOW))) errors.push(`⚠️ No puedo escribir en el canal de ${key}.`);
   }
+  const dups = duplicateLogChannels(ctx, guild);
+  if (dups.length) report.push(`\n🧹 Hay **${dups.length}** ${dups.length === 1 ? 'canal sobrante' : 'canales sobrantes'} de instalaciones anteriores: ${dups.slice(0, 10).map((c) => `<#${c.id}>`).join(' ')}. Podés borrarlos con el botón de abajo.`);
 
   const embed = new EmbedBuilder()
     .setColor(errors.length ? COLORS.warn : COLORS.ok)
-    .setTitle(errors.length ? '⚠️ Registros configurados con advertencias' : '✅ Registros listos')
+    .setTitle(errors.length ? '⚠️ Registros configurados con advertencias' : '✅ Registros listos y actualizados')
     .setDescription(truncateLines([...report, ...errors], 3900))
     .addFields(
       { name: 'Quién puede verlos', value: `Roles con Administrador o Gestionar servidor${staffRoleId ? ` y <@&${staffRoleId}>` : ''}. Nadie más.`, inline: false },
       { name: 'Mensajes enviados', value: opts.logSentMessages ? 'Se registran (podés desactivarlo en `/ajustes`).' : 'No se registran.', inline: false },
     )
-    .setFooter({ text: 'Podés volver a ejecutar /setup cuando quieras: repara sin duplicar.' });
-  return embed;
+    .setFooter({ text: 'Al actualizar el bot, los registros se sincronizan solos. /setup los repara cuando quieras, sin duplicar.' });
+  return { embed, duplicates: dups.length, ok: !errors.length };
+}
+
+/**
+ * Canales de registro sobrantes (y categorías de registros repetidas que quedarían vacías).
+ * Se recalcula en el momento de borrar: nunca incluye un canal en uso ni algo fuera de las categorías de registros.
+ */
+export function duplicateLogChannels(ctx: GameContext, guild: Guild): GuildBasedChannel[] {
+  const plan = planSetup(getLogConfig(ctx, guild.id), snapshot(guild));
+  const inUse = new Set(Object.values(getLogConfig(ctx, guild.id).channels));
+  const channels = plan.duplicates.filter((id) => !inUse.has(id)).map((id) => guild.channels.cache.get(id)).filter((c): c is GuildBasedChannel => !!c);
+  const gone = new Set(channels.map((c) => c.id));
+  const emptyCats = plan.duplicateCategories
+    .map((id) => guild.channels.cache.get(id))
+    .filter((c): c is CategoryChannel => c?.type === ChannelType.GuildCategory && c.children.cache.every((ch) => gone.has(ch.id)));
+  return [...channels, ...emptyCats];
+}
+
+/** Borra solo lo que duplicateLogChannels marca como sobrante. */
+export async function deleteLogDuplicates(ctx: GameContext, guild: Guild, executorTag: string): Promise<number> {
+  await guild.channels.fetch();
+  const list = duplicateLogChannels(ctx, guild);
+  let n = 0;
+  // Primero los canales, después las categorías (ya vacías).
+  for (const c of [...list].sort((a, b) => Number(a.type === ChannelType.GuildCategory) - Number(b.type === ChannelType.GuildCategory))) {
+    if (await c.delete(`Duplicado de registros (por ${executorTag})`).then(() => true).catch(() => false)) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Reinstalación limpia: borra los canales de registro del bot (los guardados, los sobrantes y la categoría si queda vacía)
+ * y vuelve a crearlos. Se pierde el historial de esos canales: por eso pide doble confirmación.
+ */
+export async function reinstallLogs(ctx: GameContext, guild: Guild, opts: SetupOptions): Promise<SetupResult> {
+  await guild.channels.fetch();
+  const cfg = getLogConfig(ctx, guild.id);
+  const reason = `Reinstalación de registros (por ${opts.executorTag})`;
+  const targets = [...Object.values(cfg.channels).map((id) => guild.channels.cache.get(id!)), ...duplicateLogChannels(ctx, guild)]
+    .filter((c): c is GuildBasedChannel => !!c && c.type !== ChannelType.GuildCategory);
+  for (const c of targets) await c.delete(reason).catch(() => undefined);
+  const cat = cfg.categoryId ? guild.channels.cache.get(cfg.categoryId) : undefined;
+  if (cat?.type === ChannelType.GuildCategory && cat.children.cache.size === 0) await cat.delete(reason).catch(() => undefined);
+  saveLogConfig(ctx, guild.id, { ...cfg, categoryId: null, channels: {} });
+  return runSetup(ctx, guild, { ...opts, staffRoleId: opts.staffRoleId ?? cfg.staffRoleId });
 }
 
 function truncateLines(lines: string[], max: number): string {

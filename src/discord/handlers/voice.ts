@@ -1,3 +1,4 @@
+import { maintenanceRow } from '../setupMaintenance';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, ModalBuilder, OverwriteType, PermissionFlagsBits,
   StringSelectMenuBuilder, StringSelectMenuOptionBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder,
@@ -462,7 +463,8 @@ export const voiceAdminHandler: Handler = async (app, i, id) => {
       await deferPanel(i);
       const res = await app.guildLock.run(`voice-setup:${guild.id}`, () => setupTempVoice(app, guild, i.user.username));
       if (!res.ran) throw new GameError('Ya hay una configuración en curso. Esperá a que termine.');
-      await show(res.value.join('\n'));
+      const p = voiceAdminPanel(ctx, guild, owner, res.value.report.join('\n'));
+      await update(i, { ...p, components: [...p.components, maintenanceRow(owner, 'voice', res.value.duplicates)] });
       await logSystem(ctx, guild, `🔊 <@${owner}> configuró los canales de voz temporales.`, COLORS.ok);
       return;
     }

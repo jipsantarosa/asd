@@ -112,7 +112,7 @@ export function voiceAdminPanel(ctx: GameContext, guild: Guild, owner: string, n
       `**Nombre por defecto:** \`${conf.nameTemplate}\` · **Límite por defecto:** ${conf.defaultLimit || 'sin límite'}`,
       `**Canales activos:** ${active.length}/${MAX_TEMP_CHANNELS_PER_GUILD}`,
       '',
-      '-# **Configurar / reparar** crea (o recupera) la categoría, el canal "➕ Crear canal" y el canal de interfaz, sin duplicar nada.',
+      '-# **Configurar / reparar** crea, recupera o actualiza la categoría, el canal "➕ Crear canal" y la interfaz, sin duplicar nada. Al actualizar el bot se sincroniza solo.',
     ].filter((x) => x !== '').join('\n'));
   return {
     embeds: [embed],

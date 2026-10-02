@@ -984,6 +984,21 @@ UPDATE casino_config SET value = json_set(value,
 ) WHERE key = 'main';
 `,
   },
+  {
+    id: 12,
+    name: 'versiones_de_configuracion',
+    sql: `
+-- Versión del diseño de los canales del bot (registros, voz temporal) aplicada en cada servidor.
+-- Al arrancar una versión nueva del bot, los servidores con una versión vieja se sincronizan solos.
+CREATE TABLE setup_versions (
+  guild_id   TEXT NOT NULL,
+  system     TEXT NOT NULL,
+  version    INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, system)
+);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

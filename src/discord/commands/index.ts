@@ -4,6 +4,7 @@ import { getSettings, setPrefix } from '../../services/guildSettings';
 import { getLogConfig } from '../../services/logConfig';
 import { logSystem } from '../logging/sender';
 import { runSetup } from '../logging/setup';
+import { maintenanceRow } from '../setupMaintenance';
 import { helpPanel } from '../ui/helpPanel';
 import { rolesAdminPanel } from '../ui/rolesPanel';
 import { settingsPanel } from '../ui/settingsPanel';
@@ -78,7 +79,7 @@ const setup: Command = {
   prefix: true,
   permission: PermissionFlagsBits.Administrator,
   permissionName: 'Administrador',
-  data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('setup').setDescription('Configura o repara el sistema de registros del servidor.')
+  data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('setup').setDescription('Configura, repara o actualiza el sistema de registros del servidor (sin duplicar).')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption((o) => o.setName('rol_staff').setDescription('Rol adicional (sin permisos de admin) que podrá leer los registros'))
     .addBooleanOption((o) => o.setName('registrar_mensajes').setDescription('¿Registrar todos los mensajes enviados? (por defecto: sí)')),
@@ -95,7 +96,7 @@ const setup: Command = {
       });
     });
     if (!res.ran) throw new GameError('Ya hay un `/setup` en curso en este servidor. Esperá a que termine.');
-    await c.reply({ embeds: [res.value] }, { ephemeral: true });
+    await c.reply({ embeds: [res.value.embed], components: res.value.ok || res.value.duplicates ? [maintenanceRow(c.member.id, 'logs', res.value.duplicates)] : [] }, { ephemeral: true });
     await logSystem(c.app.ctx, c.guild, `🛠️ <@${c.member.id}> ejecutó \`/setup\`.`, COLORS.ok);
   },
 };
