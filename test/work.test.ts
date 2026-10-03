@@ -26,6 +26,14 @@ describe('!work', () => {
     assert.equal(jobOf('astronauta'), null);
   });
 
+  it('ordenados del que menos paga al que más, y el desbloqueo sigue ese orden', () => {
+    for (let i = 1; i < JOBS.length; i++) {
+      assert.ok(expectedPay(JOBS[i]) > expectedPay(JOBS[i - 1]), `${JOBS[i].name} debería pagar más que ${JOBS[i - 1].name}`);
+      assert.ok(JOBS[i].requires >= JOBS[i - 1].requires);
+    }
+    assert.equal(JOBS[JOBS.length - 1].id, 'hacker');
+  });
+
   it('paga poco: el máximo diario esperado es chico y menor que un día de juego mínimo', () => {
     for (const j of JOBS) assert.ok(expectedPay(j) <= 80, `${j.name}: ${expectedPay(j)}`);
     const best = Math.max(...JOBS.map((j) => expectedPay(j)));
@@ -106,7 +114,7 @@ describe('migración 11', () => {
     db.run("INSERT INTO casino_users (user_id, created_at, last_active_at, updated_at) VALUES (?, 0, 0, 0)", U);
     db.run("INSERT INTO casino_wallets (user_id, currency, balance, updated_at) VALUES (?, 'coins', 50, 0)", U);
     db.run("INSERT INTO casino_transactions (tx_id, user_id, amount, balance_before, balance_after, type, created_at) VALUES ('t1', ?, 50, 0, 50, 'BONUS', 0)", U);
-    assert.deepEqual(runMigrations(db, 0), [11, 12]);
+    assert.deepEqual(runMigrations(db, 0), [11, 12, 13]);
     const ctx = createContext({ db });
     const c = getCasinoConfig(ctx);
     assert.equal(c.daily.amount, 100);

@@ -20,6 +20,8 @@ export interface GameContext {
 
 export interface GuildSettingsCache {
   prefix: string;
+  /** Idioma del bot en el servidor (!setlang). */
+  lang: 'es' | 'en';
 }
 
 export function createContext(opts: { db: Db; defaultPrefix?: string; now?: () => number }): GameContext {

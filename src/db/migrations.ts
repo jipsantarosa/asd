@@ -999,6 +999,59 @@ CREATE TABLE setup_versions (
 );
 `,
   },
+  {
+    id: 13,
+    name: 'perfil_casamientos_boosts_webhooks_idioma',
+    sql: `
+-- ── Casamientos (globales: una pareja por persona). user_a < user_b para que no haya dos filas por pareja ──
+CREATE TABLE marriages (
+  user_a     TEXT NOT NULL,
+  user_b     TEXT NOT NULL,
+  guild_id   TEXT,
+  married_at INTEGER NOT NULL,
+  PRIMARY KEY (user_a, user_b),
+  CHECK (user_a < user_b)
+);
+CREATE UNIQUE INDEX ux_marriages_a ON marriages (user_a);
+CREATE UNIQUE INDEX ux_marriages_b ON marriages (user_b);
+CREATE TABLE marriage_proposals (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT NOT NULL,
+  proposer_id TEXT NOT NULL,
+  target_id   TEXT NOT NULL,
+  status      TEXT NOT NULL CHECK (status IN ('open', 'accepted', 'rejected', 'expired', 'cancelled')),
+  created_at  INTEGER NOT NULL,
+  answered_at INTEGER
+);
+CREATE INDEX ix_marriage_proposals ON marriage_proposals (proposer_id, status);
+
+-- ── Mensajes de boost ──
+CREATE TABLE boost_config (
+  guild_id    TEXT PRIMARY KEY,
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  channel_id  TEXT,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL,
+  color       INTEGER NOT NULL,
+  image_url   TEXT,
+  footer      TEXT NOT NULL DEFAULT '',
+  updated_at  INTEGER NOT NULL
+);
+
+-- ── Anti-webhooks ──
+CREATE TABLE webhook_guard (
+  guild_id     TEXT PRIMARY KEY,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  allow_admins INTEGER NOT NULL DEFAULT 1,
+  kick_bots    INTEGER NOT NULL DEFAULT 1,
+  allow_roles  TEXT NOT NULL DEFAULT '[]',
+  updated_at   INTEGER NOT NULL
+);
+
+-- ── Idioma del bot en cada servidor ──
+ALTER TABLE guild_settings ADD COLUMN language TEXT NOT NULL DEFAULT 'es';
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

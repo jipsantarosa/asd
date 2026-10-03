@@ -35,16 +35,8 @@ export interface Job {
   outcomes: Outcome[];
 }
 
+/** Ordenados del que menos paga al que más (el orden también es el de desbloqueo). */
 export const JOBS: Job[] = [
-  {
-    id: 'pedidosya', name: 'Pedidos Ya', emoji: '🛵', requires: 0,
-    description: 'Repartí pedidos en bici. Paga poco pero casi siempre.',
-    outcomes: [
-      { weight: 70, min: 20, max: 35, kind: 'ok', texts: ['Hiciste {n} entregas por el centro.', 'Repartiste empanadas toda la tarde.', 'Llevaste sushi a tres departamentos sin ascensor.'] },
-      { weight: 20, min: 35, max: 50, kind: 'great', texts: ['Llovía y te dejaron buena propina.', 'Un cliente te dio propina en efectivo. 🙌'] },
-      { weight: 10, min: 5, max: 10, kind: 'bad', texts: ['Se te pinchó la rueda a mitad de camino.', 'Te cancelaron el pedido cuando ya habías llegado.'] },
-    ],
-  },
   {
     id: 'cirujeo', name: 'Cirujeando', emoji: '🗑️', requires: 0,
     description: 'Revolvé la calle buscando algo para vender. Muy variable.',
@@ -52,6 +44,15 @@ export const JOBS: Job[] = [
       { weight: 50, min: 5, max: 25, kind: 'ok', texts: ['Juntaste cartón y latas.', 'Vendiste unas botellas de vidrio.', 'Encontraste cables con un poco de cobre.'] },
       { weight: 35, min: 0, max: 5, kind: 'bad', texts: ['Hoy no apareció nada que sirva.', 'Un perro te corrió tres cuadras.'] },
       { weight: 15, min: 50, max: 90, kind: 'great', texts: ['¡Alguien tiró una tostadora que anda!', 'Encontraste una bici vieja y la vendiste.'] },
+    ],
+  },
+  {
+    id: 'pedidosya', name: 'Pedidos Ya', emoji: '🛵', requires: 0,
+    description: 'Repartí pedidos en bici. Paga poco pero casi siempre.',
+    outcomes: [
+      { weight: 70, min: 20, max: 35, kind: 'ok', texts: ['Hiciste {n} entregas por el centro.', 'Repartiste empanadas toda la tarde.', 'Llevaste sushi a tres departamentos sin ascensor.'] },
+      { weight: 20, min: 35, max: 50, kind: 'great', texts: ['Llovía y te dejaron buena propina.', 'Un cliente te dio propina en efectivo. 🙌'] },
+      { weight: 10, min: 5, max: 10, kind: 'bad', texts: ['Se te pinchó la rueda a mitad de camino.', 'Te cancelaron el pedido cuando ya habías llegado.'] },
     ],
   },
   {
@@ -74,11 +75,11 @@ export const JOBS: Job[] = [
   },
   {
     id: 'hacker', name: 'Hacker', emoji: '💻', requires: 40,
-    description: 'Contratos de seguridad informática. Alto pago, pero te pueden multar. Requiere 40 turnos.',
+    description: 'Contratos de seguridad informática. El que más paga, pero te pueden multar. Requiere 40 turnos.',
     outcomes: [
-      { weight: 45, min: 50, max: 90, kind: 'ok', texts: ['Encontraste una vulnerabilidad y cobraste la recompensa.', 'Auditaste un servidor para una pyme.'] },
-      { weight: 15, min: 100, max: 160, kind: 'great', texts: ['¡Programa de recompensas! Encontraste un fallo crítico.'] },
-      { weight: 40, min: -60, max: -25, kind: 'fine', texts: ['Te pasaste del alcance del contrato y te multaron.', 'Rompiste producción: pagás los daños.'] },
+      { weight: 50, min: 70, max: 110, kind: 'ok', texts: ['Encontraste una vulnerabilidad y cobraste la recompensa.', 'Auditaste un servidor para una pyme.'] },
+      { weight: 15, min: 140, max: 200, kind: 'great', texts: ['¡Programa de recompensas! Encontraste un fallo crítico.'] },
+      { weight: 35, min: -60, max: -25, kind: 'fine', texts: ['Te pasaste del alcance del contrato y te multaron.', 'Rompiste producción: pagás los daños.'] },
     ],
   },
 ];

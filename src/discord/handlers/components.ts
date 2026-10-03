@@ -29,6 +29,7 @@ import { settingsPanel } from '../ui/settingsPanel';
 import { CASINO_HANDLERS } from '../casino/handlers';
 import { stealHandler } from '../commands/steal';
 import { maintenanceHandler } from '../setupMaintenance';
+import { marryHandler } from '../commands/social';
 import { deferPanel, field, update, values, type Handler as UiHandler, type Ix } from './util';
 import { voiceAdminHandler, voiceHandler } from './voice';
 import { automodHandler, modHandler } from './moderation';
@@ -420,5 +421,6 @@ export const HANDLERS: Record<string, Handler> = {
   rp: rolesPublicHandler,
   cx: stealHandler,
   sy: maintenanceHandler,
+  mr: marryHandler,
   ...CASINO_HANDLERS,
 };

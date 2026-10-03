@@ -20,6 +20,7 @@ import { startCasino } from './discord/casino/scheduler';
 import { createActivityListener } from './discord/casino/activity';
 import { forgetChannel } from './casino/guilds';
 import { autoSyncLayouts } from './discord/setupMaintenance';
+import { startServerTools } from './discord/commands/serverTools';
 import path from 'node:path';
 
 async function main(): Promise<void> {
@@ -71,6 +72,8 @@ async function main(): Promise<void> {
   // Historial de avatares y banners (!avs, !banners): solo lo que el bot ve desde ahora.
   startMediaTracking(app);
   registerLogEvents(client, ctx);
+  // Mensajes de boost (/boosttracker) y protección de webhooks (/anti-webhooks).
+  startServerTools(app);
   client.on(Events.Error, (e) => logger.error('Error del cliente:', e));
 
   // Un canal borrado deja de figurar en los ajustes del casino.

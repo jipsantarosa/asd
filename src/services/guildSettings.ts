@@ -1,14 +1,14 @@
 import { GameError, type GameContext, type GuildSettingsCache } from './context';
 
-/** Ajustes por servidor que no son del casino: el prefijo de los comandos de texto. */
+/** Ajustes por servidor que no son del casino: el prefijo de los comandos de texto y el idioma. */
 
 export const PREFIX_MAX_LENGTH = 5;
 
 export function getSettings(ctx: GameContext, guildId: string): GuildSettingsCache {
   const cached = ctx.cache.settings.get(guildId);
   if (cached) return cached;
-  const row = ctx.db.get<{ prefix: string }>('SELECT prefix FROM guild_settings WHERE guild_id = ?', guildId);
-  const value: GuildSettingsCache = { prefix: row?.prefix ?? ctx.defaultPrefix };
+  const row = ctx.db.get<{ prefix: string; language: string }>('SELECT prefix, language FROM guild_settings WHERE guild_id = ?', guildId);
+  const value: GuildSettingsCache = { prefix: row?.prefix ?? ctx.defaultPrefix, lang: row?.language === 'en' ? 'en' : 'es' };
   ctx.cache.settings.set(guildId, value);
   return value;
 }
@@ -40,4 +40,19 @@ export function setPrefix(ctx: GameContext, guildId: string, raw: string): strin
   });
   ctx.cache.settings.delete(guildId);
   return prefix;
+}
+
+export const LANGUAGES = { es: 'Español', en: 'English' } as const;
+export type Lang = keyof typeof LANGUAGES;
+
+export function setLanguage(ctx: GameContext, guildId: string, raw: string): Lang {
+  const v = raw.trim().toLowerCase();
+  const lang: Lang | null = ['es', 'esp', 'español', 'espanol', 'spanish'].includes(v) ? 'es' : ['en', 'eng', 'english', 'ingles', 'inglés'].includes(v) ? 'en' : null;
+  if (!lang) throw new GameError('Idiomas disponibles: `es` (Español) y `en` (English).');
+  ctx.db.transaction(() => {
+    ensureSettings(ctx, guildId);
+    ctx.db.run('UPDATE guild_settings SET language = ?, updated_at = ? WHERE guild_id = ?', lang, ctx.now(), guildId);
+  });
+  ctx.cache.settings.delete(guildId);
+  return lang;
 }

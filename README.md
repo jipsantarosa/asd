@@ -57,6 +57,7 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 - **Motor:** `better-sqlite3` si funciona en tu PC; si no, el SQLite que trae Node (22.13+). El archivo es el mismo con cualquiera de los dos.
 - Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada (tabla `schema_migrations`).
+- **Migración 13:** casamientos, mensajes de boost, anti-webhooks e idioma por servidor.
 - **Migración 12:** guarda la versión del diseño de los canales del bot aplicada en cada servidor (para actualizarlos solos).
 - **Migración 11:** trabajos (`!work`) y economía más dura.
 - **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 1.000 monedas viejas, sumando servidores, con tope de 2.500).
@@ -75,11 +76,11 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
   | Trabajo | Requisito | Sueldo por turno |
   |---|---|---|
-  | 🛵 Pedidos Ya | — | 20–35 (propina hasta 50; a veces te cancelan: 5–10) |
-  | 🗑️ Cirujeando | — | muy variable: 0–25, a veces 50–90 |
-  | 🥬 Verdulero | 5 turnos | 30–45, estable |
-  | 📄 Vender informes | 15 turnos | 35–55 (a veces 55–80, a veces no te pagan) |
-  | 💻 Hacker | 40 turnos | 50–160, pero 40 % de chance de **multa** de 25–60 |
+  | 🗑️ Cirujeando | — | ~19 en promedio: 0–25, a veces 50–90 |
+  | 🛵 Pedidos Ya | — | ~28: 20–35 (propina hasta 50; a veces te cancelan: 5–10) |
+  | 🥬 Verdulero | 5 turnos | ~38: 30–45, estable |
+  | 📄 Vender informes | 15 turnos | ~44: 35–55 (a veces 55–80, a veces no te pagan) |
+  | 💻 Hacker | 40 turnos | ~56: 70–200, pero 35 % de chance de **multa** de 25–60 |
 - **Salidas:** la ventaja de la casa de cada juego (≈0,5–3,9 %) y las entradas a torneos especiales. El jackpot de Slots sale del 1 % de sus apuestas.
 - **Nivel y rango:** el nivel sube con el **total apostado** (no con lo ganado) y cada nivel paga una recompensa. Rangos: 🥉 Bronce, 🥈 Plata, 🥇 Oro, 💠 Platino, 💎 Diamante, 👑 Leyenda.
 - **Estadísticas por persona:** saldo, total ganado, perdido y apostado, mayor apuesta, mayor premio, mayor multiplicador, partidas, victorias, derrotas, beneficio histórico, racha actual y mejor racha, torneos jugados y ganados, bonos recibidos, fechas de creación y de última actividad; y las mismas por juego.
@@ -139,7 +140,11 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 | `/balance [usuario]` · `!bal` | todos | Billetera, bonos disponibles y actividad del día |
 | `/work [trabajo]` · `!work` | todos | Trabajos: Pedidos Ya, Cirujeando, Verdulero, Vender informes, Hacker |
 | `/daily` · `/weekly` · `/rescate` | todos | Bonos (chicos) |
-| `/perfil [usuario]` · `!profile` | todos | Perfil con nivel, rango y estadísticas; pestañas de stats, historial y logros |
+| `/profile [usuario]` · `!profile` · `!perfil` | todos | Tarjeta de perfil: nivel, puesto, besos, logros, billetera y matrimonio; botón a las estadísticas del casino |
+| `/marry [usuario]` · `!marry @x` (o respondiendo) · `/divorce` | todos | Propuesta de casamiento con botones (una pareja por persona, vence a los 10 min) y divorcio con confirmación |
+| `/boosttracker setup·edit·test·reset·off·status` | Gestionar servidor | Mensaje especial cuando alguien boostea: canal, título, descripción, color (Oro, Rosa, Morado…, o #RRGGBB), imagen y footer. Variables `{user}` `{username}` `{server}` `{boosts}` `{tier}` |
+| `/anti-webhooks setup·off·status·allow·disallow·admins·bots` | Gestionar servidor | Borra webhooks creados por quien no tiene permiso (y expulsa al bot que los creó), y borra mensajes de webhooks con @everyone, invitaciones o spam |
+| `!setlang es` · `!setlang en` | ver: todos · cambiar: Gestionar servidor | Idioma del bot en el servidor |
 | `/top [categoria] [pagina] [servidor]` · `!top 2` · `!top ganancias` | todos | **💰 Richest Players** (por saldo) y categorías secundarias, global o del servidor |
 | `/rank [usuario]` | todos | Puesto en cada ranking |
 | `/stats [juego]` · `/history [juego] [pagina]` | todos | Estadísticas por juego e historial de rondas o movimientos |
@@ -153,6 +158,8 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 | `!premium …` | dueño / todos | Premium |
 
 Mencionar al bot funciona igual que el prefijo.
+
+**Idioma:** `!setlang en` pasa a inglés la ayuda, el perfil, los casamientos, el boost tracker y el anti-webhooks de ese servidor; los juegos y el resto de los paneles siguen en español por ahora.
 
 **Responder en lugar de mencionar:** en los comandos por prefijo que apuntan a alguien (`!kiss`, `!besos`, `!avs`, `!banners`, `!names`, `!perfil`, `!balance`, `!stats`…), si respondés a un mensaje y no mencionás a nadie, el comando usa al autor de ese mensaje. Ejemplo: responderle a alguien con `!kiss`.
 
@@ -267,7 +274,7 @@ Qué hace al ejecutarse:
 npm test
 ```
 
-Son 195 tests sin Discord real. Cubren, entre otros:
+Son 204 tests sin Discord real. Cubren, entre otros:
 
 - **invariantes de la economía:** suma de saldos = suma de transacciones, ningún saldo negativo, cada ronda con un único cierre, lo apostado y lo pagado de cada ronda igual a sus movimientos, y las estadísticas de cada persona iguales a la suma de sus rondas — verificado también con **1.500 rondas al azar** de los 10 juegos;
 - `applyTx`: enteros seguros, signo según el tipo, fondos insuficientes sin cambios, idempotencia y `CHECK` de la base;
@@ -276,7 +283,8 @@ Son 195 tests sin Discord real. Cubren, entre otros:
 - RTP de cada juego: ruleta 36/37, tabla de Slots escalada, P(Crash ≥ x) = RTP/x, tablas de Plinko, valor esperado de cada escalón en Minas, Pollo, Globos y Dragon Tower, Hilo y una simulación de Blackjack;
 - azar verificable (determinismo, rotación, hash, recálculo de rondas reales), tope de premio, jackpot, "repetir" una sola vez;
 - torneos: creación automática idempotente, puntuación, entradas, cancelación con devolución, cierre que paga una sola vez y rondas mínimas;
-- `!work`: los 5 trabajos, espera compartida, tope diario, desbloqueo por experiencia, multa del hacker sin saldo negativo, cuentas nuevas o suspendidas;
+- casamientos (una pareja por persona, propuestas cruzadas, vencimiento), boost tracker, anti-webhooks e idioma (todos los textos nuevos tienen inglés);
+- `!work`: los 5 trabajos ordenados por sueldo, espera compartida, tope diario, desbloqueo por experiencia, multa del hacker sin saldo negativo, cuentas nuevas o suspendidas;
 - bonos (racha, espera, rescate), actividad anti-farming (cortos, repetidos, ráfagas, espera, tope, rendimiento decreciente, cuentas nuevas, mismo mensaje), lluvias de monedas, rankings y ajustes;
 - **todas las pantallas y paneles** contra los límites de Discord (embeds, filas, botones, `customId` y el máximo de 40 componentes en Components V2);
 - sincronización de `/setup` y `/voz`: base perdida, nombres viejos, otra categoría repetida, sobrantes, huérfanos vacíos (y los que tienen gente o están fuera de la categoría no se tocan), versión del diseño;

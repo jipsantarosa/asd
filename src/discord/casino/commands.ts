@@ -188,23 +188,6 @@ function bonusCommand(kind: 'daily' | 'weekly' | 'rescue', name: string, aliases
 
 // ───────────────────────── Perfil, ranking, estadísticas ─────────────────────────
 
-const perfil: Command = {
-  name: 'perfil',
-  aliases: ['profile', 'p', 'yo', 'nivel', 'level'],
-  prefix: true,
-  data: guildOnly(new SlashCommandBuilder().setName('perfil').setDescription('👤 Tu perfil del casino: nivel, rango, estadísticas y logros.'))
-    .addUserOption((o) => o.setName('usuario').setDescription('Ver el perfil de otra persona')),
-  async run(c) {
-    const t = await targetOf(c, 0);
-    if (t.id === c.member.id) {
-      ensureCasinoUser(c.app.ctx, t.id);
-      touchUser(c.app.ctx, t.id, c.guild.id);
-      await syncRewardRoles(c.app.ctx, c.member);
-    }
-    await c.reply(profilePanel(c.app.ctx, c.viewer, t));
-  },
-};
-
 const top: Command = {
   name: 'top',
   aliases: ['ranking', 'leaderboard', 'lb', 'ricos'],
@@ -338,7 +321,7 @@ export const CASINO_COMMANDS: Command[] = [
   bonusCommand('daily', 'daily', ['diario', 'd'], '🎁 Cobrá tu bono diario (con racha).'),
   bonusCommand('weekly', 'weekly', ['semanal', 'w'], '📅 Cobrá tu bono semanal.'),
   bonusCommand('rescue', 'rescate', ['rescue', 'ayudita'], '🛟 Un rescate si te quedaste casi sin Coins.'),
-  workCommand, perfil, top, rank, stats, history, logros, fairness, tournamentCommand,
+  workCommand, top, rank, stats, history, logros, fairness, tournamentCommand,
   ...GAME_COMMAND_LIST,
 ];
 

@@ -17,7 +17,7 @@ describe('comandos', () => {
     for (const t of [
       'casino', 'balance', 'daily', 'weekly', 'rescate', 'perfil', 'profile', 'top', 'rank', 'stats', 'history', 'logros', 'fairness', 'torneo', 'tournament',
       'blackjack', 'ruleta', 'slots', 'crash', 'plinko', 'minas', 'pollo', 'globos', 'hilo', 'dragon',
-      'steal', 'm', 'avs', 'banners', 'kiss', 'besos', 'voz', 'canal', 'warn', 'timeout', 'kick', 'ban', 'unban', 'modlogs', 'caso', 'automod',
+      'steal', 'marry', 'divorce', 'setlang', 'boosttracker', 'anti-webhooks', 'work', 'm', 'avs', 'banners', 'kiss', 'besos', 'voz', 'canal', 'warn', 'timeout', 'kick', 'ban', 'unban', 'modlogs', 'caso', 'automod',
     ]) assert.ok(findCommand(t), `falta ${t}`);
     for (const gone of ['granja', 'pesca', 'mercado', 'inventario', 'autoplay', 'jugar', 'eventos']) assert.equal(findCommand(gone), undefined, `sigue existiendo ${gone}`);
   });
