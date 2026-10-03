@@ -1094,6 +1094,31 @@ CREATE TABLE premium_roles (
 );
 `,
   },
+  {
+    id: 17,
+    name: 'trabajos_con_riesgo',
+    sql: `
+-- !work: cada trabajo tiene su propia espera, y hay racha de días trabajados.
+CREATE TABLE casino_job_cooldowns (
+  user_id TEXT NOT NULL,
+  job_id  TEXT NOT NULL,
+  last_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, job_id)
+);
+CREATE TABLE casino_work_streaks (
+  user_id  TEXT PRIMARY KEY,
+  streak   INTEGER NOT NULL,
+  last_day TEXT NOT NULL
+);
+-- Nuevos valores pedidos (diario 50 con racha, semanal 500, trabajos de 1 hora con cupo diario),
+-- también si la configuración ya estaba guardada. El resto de la configuración se conserva.
+UPDATE casino_config SET value = json_set(value,
+  '$.daily.amount', 50, '$.daily.streakPct', 10, '$.daily.streakMaxDays', 7,
+  '$.weekly.amount', 500,
+  '$.work.cooldownMinutes', 60, '$.work.dailyCap', 3000, '$.work.streakPct', 2, '$.work.streakMaxDays', 10)
+WHERE key = 'main' AND json_valid(value);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

@@ -15,9 +15,9 @@ La economía está pensada para ser **difícil de farmear**.
 | Fuente | Cuánto | Límite |
 |---|---|---|
 | Saldo inicial | 1.000 | una vez |
-| [`!work`](trabajos.md) | ~19 a ~56 por turno según el trabajo | 1 turno cada 90 min, máximo 5 por día |
-| `!daily` | 100 (+5 % por día de racha, hasta +30 %) | una vez por día |
-| `!weekly` | 400 | cada 7 días |
+| [`!work`](trabajos.md) | 10 a 2.500 por turno según el trabajo (los caros tienen riesgo y fianza) | cada trabajo 1 vez por hora, cupo de 3.000 por día |
+| `!daily` | 50 (+10 % por día de racha, hasta +70 %) | una vez por día |
+| `!weekly` | 500 | cada 7 días |
 | `!rescate` | 100 | solo con menos de 20 Coins y sin partidas abiertas, cada 24 h |
 | Chatear | 1 a 3 por mensaje | cada 2 min, tope 50 por día |
 | Subir de nivel | 3 × nivel | una vez por nivel |

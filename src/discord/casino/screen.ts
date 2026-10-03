@@ -34,19 +34,27 @@ function handleFor(message: Message | null, viaInteraction: ChatInputCommandInte
   return {
     message,
     async edit(s) {
-      try {
-        if (viaInteraction && Date.now() - born < INTERACTION_TTL) {
+      let lastErr: unknown = null;
+      // Primero por la interacción (mientras sea válida); si falla (venció o ya la respondió otro), directo al mensaje.
+      if (viaInteraction && Date.now() - born < INTERACTION_TTL) {
+        try {
           if (original) await viaInteraction.editReply(payloadOf(s));
           else if (message) await viaInteraction.webhook.editMessage(message.id, payloadOf(s));
+          else throw new Error('sin mensaje');
           return true;
+        } catch (err) {
+          lastErr = err;
         }
-        if (message) {
+      }
+      if (message) {
+        try {
           await message.edit(payloadOf(s));
           return true;
+        } catch (err) {
+          lastErr = err;
         }
-      } catch (err) {
-        logger.warn('No pude actualizar la pantalla del juego:', err instanceof Error ? err.message : err);
       }
+      if (lastErr) logger.warn('No pude actualizar la pantalla del juego:', lastErr instanceof Error ? lastErr.message : lastErr);
       return false;
     },
   };
@@ -82,8 +90,16 @@ export async function sendFromButton(i: MessageComponentInteraction, s: Screen):
 /** Reemplaza el mensaje del botón tocado (una decisión dentro de la partida). */
 export async function updateFromButton(i: MessageComponentInteraction, s: Screen): Promise<ScreenHandle> {
   const body = payloadOf(s);
-  if (i.deferred || i.replied) await i.editReply(body);
-  else await i.update(body);
+  try {
+    if (i.deferred || i.replied) await i.editReply(body);
+    else await i.update(body);
+  } catch (err) {
+    // La interacción ya no sirve (venció o la respondió otra copia del bot): se edita el mensaje directo,
+    // así la pantalla nunca queda con botones viejos.
+    const ok = await i.message.edit(body).then(() => true, () => false);
+    if (!ok) throw err;
+    return handleFor(i.message, null);
+  }
   return handleFor(i.message, i);
 }
 

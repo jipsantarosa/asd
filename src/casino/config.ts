@@ -60,8 +60,8 @@ export interface CasinoConfig {
     minMemberHours: number;
   };
   levels: { rewardPerLevel: number };
-  /** !work: turnos con espera compartida entre trabajos y tope diario. */
-  work: { enabled: boolean; cooldownMinutes: number; maxShiftsPerDay: number; payPct: number; minAccountDays: number };
+  /** !work: cada trabajo con su espera, cupo diario de ganancias y racha de días trabajados. */
+  work: { enabled: boolean; cooldownMinutes: number; dailyCap: number; streakPct: number; streakMaxDays: number; payPct: number; minAccountDays: number };
   jackpot: { seed: number; contributionPct: number; fullBet: number };
   tournaments: { daily: AutoTournament; weekly: AutoTournament };
   /** Anuncio de grandes premios en el canal del casino de cada servidor. */
@@ -92,15 +92,15 @@ export const DEFAULT_CASINO: CasinoConfig = {
     hilo: game(3),
     tower: game(3),
   },
-  daily: { amount: 100, streakPct: 5, streakMaxDays: 6 },
-  weekly: { amount: 400 },
+  daily: { amount: 50, streakPct: 10, streakMaxDays: 7 },
+  weekly: { amount: 500 },
   rescue: { amount: 100, below: 20, cooldownHours: 24 },
   activity: {
     enabled: true, min: 1, max: 3, cooldownSeconds: 120, dailyCap: 50, minLetters: 8, minWords: 3,
     decayAfter: 15, streakPct: 3, streakMaxDays: 5, minAccountDays: 14, minMemberHours: 24,
   },
   levels: { rewardPerLevel: 3 },
-  work: { enabled: true, cooldownMinutes: 90, maxShiftsPerDay: 5, payPct: 100, minAccountDays: 14 },
+  work: { enabled: true, cooldownMinutes: 60, dailyCap: 3_000, streakPct: 2, streakMaxDays: 10, payPct: 100, minAccountDays: 14 },
   jackpot: { seed: 5_000, contributionPct: 1, fullBet: 500 },
   tournaments: {
     daily: { enabled: true, metric: 'profit', prizes: [1_500, 900, 600], minRounds: 15 },
@@ -149,8 +149,10 @@ export const CONFIG_FIELDS: Record<string, FieldDef> = {
   'activity.minAccountDays': { label: 'Actividad: antigüedad mínima de la cuenta (días)', min: 0, max: 365 },
   'activity.minMemberHours': { label: 'Actividad: horas mínimas en el servidor', min: 0, max: 720 },
   'levels.rewardPerLevel': { label: 'Recompensa por nivel (× nivel)', min: 0, max: 100_000 },
-  'work.cooldownMinutes': { label: 'Trabajo: minutos entre turnos', min: 5, max: 1_440 },
-  'work.maxShiftsPerDay': { label: 'Trabajo: turnos por día', min: 1, max: 48 },
+  'work.cooldownMinutes': { label: 'Trabajo: minutos de espera de cada trabajo', min: 5, max: 1_440 },
+  'work.dailyCap': { label: 'Trabajo: cupo diario de ganancias', min: 0, max: 100_000_000 },
+  'work.streakPct': { label: 'Trabajo: % extra por día de racha', min: 0, max: 50 },
+  'work.streakMaxDays': { label: 'Trabajo: días máximos de racha', min: 0, max: 60 },
   'work.payPct': { label: 'Trabajo: % del sueldo base', min: 0, max: 1_000 },
   'work.minAccountDays': { label: 'Trabajo: antigüedad mínima de la cuenta (días)', min: 0, max: 365 },
   'jackpot.seed': { label: 'Jackpot: monto inicial', min: 0, max: 1_000_000_000 },

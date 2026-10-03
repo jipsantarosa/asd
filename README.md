@@ -80,16 +80,22 @@ La configuración y los saldos están en `data/valle.db` y el token en `.env`. P
 
 - **Coins 🪙**, una billetera por persona que vale en todos los servidores donde está el bot. **No hay transferencias entre personas** (así las cuentas alternativas no pueden juntar bonos en una principal).
 - Cada cambio de saldo es una **transacción** con saldo anterior y nuevo, tipo (`BET`, `WIN`, `LOSS`, `PUSH`, `REFUND`, `BONUS`, `ACTIVITY`, `LEVEL_REWARD`, `ACHIEVEMENT_REWARD`, `TOURNAMENT_REWARD`, `TOURNAMENT_ENTRY`, `JACKPOT`, `DROP`, `ADMIN_ADJUSTMENT`…) y, cuando corresponde, una **clave única** que impide pagar dos veces. La base verifica con `CHECK` que cada movimiento cuadre y que ningún saldo sea negativo. `!casino audit` comprueba que la suma de los saldos sea igual a la suma de las transacciones.
-- **La economía está pensada para ser difícil de farmear** (todo configurable por el dueño): saldo inicial 1.000 · `!daily` 100 + 5 % por día de racha (hasta +30 %) · `!weekly` 400 · `!rescate` 100 si tenés menos de 20 (cada 24 h) · actividad 1–3 por mensaje (tope 50/día) · subir de nivel 3 × nivel · logros 25 a 2.500 · torneos.
-- **`!work` — trabajos:** un turno cada **90 minutos** (la espera es la misma para todos los trabajos) y como máximo **5 turnos por día**; cuentas de Discord de menos de 14 días no pueden trabajar. Un día entero de trabajo da unas 150–250 Coins.
+- **La economía está pensada para ser difícil de farmear** (todo configurable por el dueño): saldo inicial 1.000 · `!daily` 50 + 10 % por día de racha (hasta +70 %) · `!weekly` 500 · `!rescate` 100 si tenés menos de 20 (cada 24 h) · actividad 1–3 por mensaje (tope 50/día) · subir de nivel 3 × nivel · logros 25 a 2.500 · torneos.
+- **`!work` — trabajos con riesgo:** cada trabajo tiene su espera de **1 hora** (mientras, se pueden hacer otros), una probabilidad de salir bien, un rango de sueldo y, los más caros, una **fianza** que se pierde si sale mal. Cupo de **3.000 Coins por día** y **racha** de días seguidos (+2 % por día, hasta +20 %). Cuentas de Discord de menos de 14 días no pueden trabajar.
 
-  | Trabajo | Requisito | Sueldo por turno |
-  |---|---|---|
-  | 🗑️ Cirujeando | — | ~19 en promedio: 0–25, a veces 50–90 |
-  | 🛵 Pedidos Ya | — | ~28: 20–35 (propina hasta 50; a veces te cancelan: 5–10) |
-  | 🥬 Verdulero | 5 turnos | ~38: 30–45, estable |
-  | 📄 Vender informes | 15 turnos | ~44: 35–55 (a veces 55–80, a veces no te pagan) |
-  | 💻 Hacker | 40 turnos | ~56: 70–200, pero 35 % de chance de **multa** de 25–60 |
+  | Trabajo | Riesgo | Sale bien | Sueldo | Fianza |
+  |---|---|---|---|---|
+  | 🗑️ **Cirujeando** | 🟢 Seguro | 100 % | 10–30 | — |
+  | 🛵 **Pedidos Ya** | 🟢 Seguro | 100 % | 15–35 | — |
+  | 🧽 **Lavacoches** | 🟢 Seguro | 100 % | 20–40 | — |
+  | 🐕 **Paseador de perros** | 🟡 Moderado | 90 % | 25–55 | — |
+  | 🥬 **Verdulero** | 🟡 Moderado | 85 % | 40–90 | 10 |
+  | 🔧 **Plomero** | 🟡 Moderado | 75 % | 75–165 | 20 |
+  | 📄 **Vender informes** | 🟡 Moderado | 70 % | 110–240 | 30 |
+  | 🎧 **DJ de fiestas** | 🟡 Moderado | 60 % | 200–420 | 60 |
+  | 💻 **Hacker** | 🔴 Arriesgado | 45 % | 450–1.000 | 150 |
+  | 🎟️ **Revendedor de entradas** | 🔴 Arriesgado | 40 % | 600–1.400 | 200 |
+  | 🗺️ **Cazatesoros** | 🔴 Arriesgado | 35 % | 1.100–2.500 | 300 |
 - **Salidas:** la ventaja de la casa de cada juego (≈0,5–3,9 %) y las entradas a torneos especiales. El jackpot de Slots sale del 1 % de sus apuestas.
 - **Nivel y rango:** el nivel sube con el **total apostado** (no con lo ganado) y cada nivel paga una recompensa. Rangos: 🥉 Bronce, 🥈 Plata, 🥇 Oro, 💠 Platino, 💎 Diamante, 👑 Leyenda.
 - **Estadísticas por persona:** saldo, total ganado, perdido y apostado, mayor apuesta, mayor premio, mayor multiplicador, partidas, victorias, derrotas, beneficio histórico, racha actual y mejor racha, torneos jugados y ganados, bonos recibidos, fechas de creación y de última actividad; y las mismas por juego.
@@ -147,7 +153,7 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 | `/casino` · `!casino` | todos | Lobby: saldo, jackpot, torneos y juegos con sus reglas |
 | `/blackjack` `/ruleta` `/slots` `/crash` `/plinko` `/minas` `/pollo` `/globos` `/hilo` `/dragon` | todos | Los 10 juegos (también por prefijo, con alias como `!bj`, `!rl`, `!mines`, `!tower`) |
 | `/balance [usuario]` · `!bal` | todos | Billetera, bonos disponibles y actividad del día |
-| `/work [trabajo]` · `!work` | todos | Trabajos: Pedidos Ya, Cirujeando, Verdulero, Vender informes, Hacker |
+| `/work [trabajo]` · `!work` | todos | 11 trabajos con riesgo, sueldo y fianza; cada uno una vez por hora |
 | `/daily` · `/weekly` · `/rescate` | todos | Bonos (chicos) |
 | `/profile [usuario]` · `!profile` · `!perfil` | todos | Tarjeta de perfil: nivel, puesto, besos, logros, billetera y matrimonio; botón a las estadísticas del casino |
 | `/marry [usuario]` · `!marry @x` (o respondiendo) · `/divorce` | todos | Propuesta de casamiento con botones (una pareja por persona, vence a los 10 min) y divorcio con confirmación |

@@ -176,6 +176,14 @@ export class ActiveRoundError extends GameError {
   }
 }
 
+/** La partida ya se liquidó (botón de un mensaje que no se llegó a actualizar). */
+export class RoundOverError extends GameError {
+  constructor() {
+    super('Esa partida ya terminó.');
+    this.name = 'RoundOverError';
+  }
+}
+
 /** Botón viejo (doble clic, mensaje repetido): su versión ya no es la actual. */
 export class StaleActionError extends GameError {
   constructor() {
@@ -269,6 +277,9 @@ function createRound(ctx: GameContext, req: BetRequest, game: CasinoGame): { rou
   if (!gs.enabled) throw new GameError(`🔒 ${game.emoji} **${game.name}** está cerrado por ahora.`);
   ensureCasinoUser(ctx, req.userId);
   assertNotBlocked(ctx, req.userId);
+  if (Number.isSafeInteger(req.bet) && req.bet < gs.minBet && getBalance(ctx, req.userId) < gs.minBet) {
+    throw new GameError(`No te alcanza para ${game.name}: la apuesta mínima es 🪙 **${gs.minBet.toLocaleString('es-AR')}** y tenés 🪙 **${getBalance(ctx, req.userId).toLocaleString('es-AR')}**. Probá \`!daily\` o \`!work\`.`);
+  }
   if (!Number.isSafeInteger(req.bet) || req.bet < gs.minBet || req.bet > gs.maxBet) {
     throw new GameError(`La apuesta de ${game.name} tiene que ser entre 🪙 **${gs.minBet.toLocaleString('es-AR')}** y 🪙 **${gs.maxBet.toLocaleString('es-AR')}**.`);
   }
@@ -340,7 +351,7 @@ export function actOnRound<S = unknown>(ctx: GameContext, a: { userId: string; r
     if (!raw) throw new GameError('Esa partida no existe.');
     const round = toRound(raw);
     if (round.userId !== a.userId) throw new GameError('🔒 Esa partida es de otra persona.');
-    if (round.status !== 'active') throw new GameError('Esa partida ya terminó.');
+    if (round.status !== 'active') throw new RoundOverError();
     if (round.version !== a.version) throw new StaleActionError();
     const game = gameOf(round.game);
     if (!game.act) throw new GameError('Este juego no tiene decisiones.');
@@ -437,7 +448,7 @@ function settle(ctx: GameContext, round: Round, s: Settlement, finalState: unkno
      WHERE id = ? AND status = 'active'`,
     first === 'win' ? 'won' : first === 'push' ? 'push' : 'lost', gamePayout, multiplier, finalState === null ? null : JSON.stringify(finalState), JSON.stringify(s.result ?? {}), s.summary.slice(0, 300), now, now, round.id,
   );
-  if (upd.changes !== 1) throw new GameError('Esa partida ya terminó.');
+  if (upd.changes !== 1) throw new RoundOverError();
 
   // 2) Pagar (o registrar la pérdida). La clave settle:<id> garantiza una sola liquidación.
   const base = { userId: round.userId, game: round.game, roundId: round.id, guildId: round.guildId, key: `settle:${round.id}` };

@@ -355,19 +355,28 @@ const kissHandler: Handler = async (app, i, id) => {
     return;
   }
   const buttons = (state: 'returned' | 'rejected') => kissButtons(k?.id ?? null, state, legacy ? id.args : []);
+  // Acusa el clic editando el mensaje. Si la interacción ya no sirve (venció, o la contestó otra copia del bot),
+  // se edita el mensaje directo: el beso ya quedó guardado y la respuesta se manda igual.
+  const ack = async (body: Parameters<typeof i.update>[0] & object) => {
+    try {
+      await i.update(body);
+    } catch {
+      await i.message.edit(body as Parameters<typeof i.message.edit>[0]).catch(() => undefined);
+    }
+  };
 
   if (id.act === 'no') {
     if (k) rejectKiss(ctx, i.guild.id, k.id, i.user.id);
     else claimKissReply(ctx, i.message.id, i.guild.id, i.user.id, 'rechazado');
     const original = i.message.embeds[0] ? EmbedBuilder.from(i.message.embeds[0]) : new EmbedBuilder();
-    await i.update({ embeds: [rejectedEmbed(original, targetName)], components: [buttons('rejected')] });
+    await ack({ embeds: [rejectedEmbed(original, targetName)], components: [buttons('rejected')] });
     return;
   }
 
   // Corresponder: primero se marca y se cuenta (atómico); recién después se habla con Discord.
   const pair = k ? returnKiss(ctx, i.guild.id, k.id, i.user.id).result.pair : kissBack(ctx, i.message.id, i.guild.id, i.user.id, authorId).pair;
   // Desactiva los botones del original al instante (también es el acuse de la interacción).
-  await i.update({ components: [buttons('returned')] });
+  await ack({ components: [buttons('returned')] });
   const gif = await randomKissGif({ exclude: [k?.gif_url, i.message.embeds[0]?.image?.url] });
   const payload = { embeds: [kissEmbed({ from: targetName, to: authorName, count: pair, gif, back: true })], allowedMentions: { parse: [], repliedUser: false } };
   const me = i.guild.members.me;

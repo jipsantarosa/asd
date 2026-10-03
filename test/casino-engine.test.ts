@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { DEFAULT_CASINO, GAME_IDS, getCasinoConfig, saveCasinoConfig, type GameId } from '../src/casino/config';
 import { applyTx, ensureCasinoUser, getBalance, InsufficientFundsError, ledgerAudit } from '../src/casino/economy';
 import {
-  ActiveRoundError, actOnRound, claimRebet, fairSummaryOf, getRound, playInstant, refundRound, resolveStaleRound, StaleActionError, startRound, tickLiveRound,
+  ActiveRoundError, actOnRound, claimRebet, fairSummaryOf, getRound, playInstant, refundRound, resolveStaleRound, RoundOverError, StaleActionError, startRound, tickLiveRound,
   viewOf, type RoundView,
 } from '../src/casino/engine';
 import { GAMES } from '../src/casino/games';
@@ -123,6 +123,21 @@ describe('decisiones dentro de la partida', () => {
     // Tocar "cobrar" otra vez (o cualquier botón) ya no paga nada.
     expectGameError(() => actOnRound(w.ctx, { userId: U, roundId: v.round.id, version: c.round.version, action: { type: 'cash' } }), /terminó/);
     expectGameError(() => actOnRound(w.ctx, { userId: U, roundId: v.round.id, version: a.round.version, action: { type: 'cash' } }), /terminó/);
+    // La interfaz distingue estos dos errores para poner el mensaje al día en vez de dejarlo trabado.
+    assert.throws(() => actOnRound(w.ctx, { userId: U, roundId: v.round.id, version: c.round.version, action: { type: 'cash' } }), RoundOverError);
+    audit(w);
+  });
+
+  it('Pollo: botón viejo da StaleActionError y se puede seguir con la versión actual hasta retirarse', () => {
+    const w = makeWorld();
+    const v = startRound(w.ctx, req('chicken', 100, parse('chicken')));
+    assert.throws(() => actOnRound(w.ctx, { userId: U, roundId: v.round.id, version: v.round.version + 5, action: { type: 'cash' } }), StaleActionError);
+    // Con la versión actual (la que muestra el mensaje puesto al día) se sigue jugando y retirarse funciona.
+    const now = viewOf(w.ctx, v.round.id);
+    const go = actOnRound(w.ctx, { userId: U, roundId: v.round.id, version: now.round.version, action: { type: 'go' } });
+    const out = go.settled ? go : actOnRound(w.ctx, { userId: U, roundId: v.round.id, version: go.round.version, action: { type: 'cash' } });
+    assert.ok(out.settled);
+    assert.equal(getRound(w.ctx, v.round.id)!.status === 'active', false);
     audit(w);
   });
 

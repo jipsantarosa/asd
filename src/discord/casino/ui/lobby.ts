@@ -94,7 +94,7 @@ export function walletPanel(ctx: GameContext, v: Viewer, activity: { coins: numb
       `🛟 **Rescate:** ${b.rescueAt === null ? `solo con menos de ${coins(cfg.rescue.below)}` : ready(b.rescueAt) ? '✅ disponible' : `en ${rel(b.rescueAt)}`}`,
       (() => {
         const w = workStatus(ctx, v.userId);
-        return `🧰 **Trabajo** (\`!work\`): ${w.readyAt ? `en ${rel(w.readyAt)}` : '✅ disponible'} · hoy ${w.todayShifts}/${w.maxPerDay}`;
+        return `💼 **Trabajos** (\`!work\`): ${w.readyCount} listos · cupo hoy ${coins(w.remaining)}${w.streak ? ` · racha ${w.streak}` : ''}`;
       })(),
       `💬 **Actividad hoy:** ${coins(activity.coins)} / ${coins(activity.cap)}${cfg.boost.until > now ? ` · ⚡ boost ×${cfg.boost.activity} hasta ${rel(cfg.boost.until)}` : ''}`,
       '',

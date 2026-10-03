@@ -159,15 +159,16 @@ const balance: Command = {
   },
 };
 
-export function bonusEmbed(kind: 'daily' | 'weekly' | 'rescue', r: BonusResult, name: string): EmbedBuilder {
-  const title = { daily: '🎁 Bono diario', weekly: '📅 Bono semanal', rescue: '🛟 Rescate' }[kind];
-  return new EmbedBuilder().setColor(COLORS.win).setTitle(title).setDescription([
-    `**${name}** recibió **${coins(r.amount)}**.`,
-    kind === 'daily' ? `🔥 Racha: **${r.streak}** ${r.streak === 1 ? 'día' : 'días'} (volvé mañana para mantenerla)` : '',
+export function bonusEmbed(kind: 'daily' | 'weekly' | 'rescue', r: BonusResult, name: string, avatar?: string): EmbedBuilder {
+  const what = { daily: '🎁 Reclamaste', weekly: '📅 Reclamaste el semanal:', rescue: '🛟 Rescate:' }[kind];
+  const e = new EmbedBuilder().setColor(COLORS.win).setAuthor({ name, iconURL: avatar }).setDescription([
+    `${what} **${coins(r.amount)}**`,
+    kind === 'daily' ? `🔥 Racha: **${r.streak} ${r.streak === 1 ? 'día' : 'días'}**` : '',
     `💼 Saldo: **${coins(r.balance)}**`,
-    `⏱️ Próximo: ${rel(r.nextAt)}`,
+    `-# Próximo ${rel(r.nextAt)}${kind === 'daily' ? ' · volvé mañana para mantener la racha' : ''}`,
     ...r.achievements.map((a) => `🏅 Logro: **${a.def.emoji} ${a.def.name}** +${coins(a.reward)}`),
   ].filter(Boolean).join('\n'));
+  return e;
 }
 
 function bonusCommand(kind: 'daily' | 'weekly' | 'rescue', name: string, aliases: string[], description: string): Command {
@@ -180,7 +181,7 @@ function bonusCommand(kind: 'daily' | 'weekly' | 'rescue', name: string, aliases
       const claim = { daily: claimDaily, weekly: claimWeekly, rescue: claimRescue }[kind];
       const r = claim(c.app.ctx, c.member.id, c.guild.id);
       touchUser(c.app.ctx, c.member.id, c.guild.id);
-      await c.reply({ embeds: [bonusEmbed(kind, r, c.member.displayName)] });
+      await c.reply({ embeds: [bonusEmbed(kind, r, c.member.displayName, c.member.displayAvatarURL({ size: 64 }))] });
       if (r.achievements.length) await syncRewardRoles(c.app.ctx, c.member);
     },
   };

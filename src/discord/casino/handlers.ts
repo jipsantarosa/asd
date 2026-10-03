@@ -3,7 +3,7 @@ import { logAdmin } from '../../casino/admin';
 import { claimDaily, claimRescue, claimWeekly } from '../../casino/bonus';
 import { activityToday } from '../../casino/activity';
 import { getCasinoConfig, isGameId, saveCasinoConfig, setConfigNumber, type GameId } from '../../casino/config';
-import { getRound, viewOf } from '../../casino/engine';
+import { getRound, RoundOverError, StaleActionError, viewOf } from '../../casino/engine';
 import { claimDrop, getDrop } from '../../casino/events';
 import { TOP_CATEGORIES, type TopCategory } from '../../casino/leaderboard';
 import { CLIENT_SEED_RE, rotateSeed } from '../../casino/rng';
@@ -49,6 +49,23 @@ const channelOf = (i: Ix) => ({ channelId: i.channelId ?? '', parentId: i.channe
 
 // ───────────────────────── Juegos ─────────────────────────
 
+/** Repinta el mensaje del botón con el estado actual de la partida. Devuelve false si no corresponde. */
+async function resyncRound(app: App, i: Ix, roundId: number, over: boolean): Promise<boolean> {
+  if (!i.isMessageComponent()) return false;
+  const round = getRound(app.ctx, roundId);
+  if (!round || round.userId !== i.user.id) return false;
+  // Un Crash en vuelo lo maneja su propio reloj: no se pisa su pantalla.
+  if (round.status === 'active' && hasLiveRunner(roundId)) return false;
+  await updateFromButton(i, render(app.ctx, viewOf(app.ctx, round.id), viewerOf(i.member)));
+  await i.followUp({
+    content: over || round.status !== 'active'
+      ? '🔄 Esa partida ya había terminado: actualicé el mensaje con el resultado.'
+      : '🔄 El mensaje estaba desactualizado: ya lo puse al día. Tocá el botón de nuevo.',
+    flags: MessageFlags.Ephemeral,
+  }).catch(() => undefined);
+  return true;
+}
+
 const gameHandler: Handler = async (app, i, id) => {
   if (!i.isMessageComponent()) throw new GameError('Acción desconocida.');
   const ctx = app.ctx;
@@ -61,7 +78,16 @@ const gameHandler: Handler = async (app, i, id) => {
       if (!/^[a-z]{1,12}$/.test(action ?? '')) throw new GameError('Acción inválida.');
       const arg = argRaw === undefined ? undefined : int(argRaw, 'Casilla');
       const live = hasLiveRunner(roundId);
-      const { view, frames, final } = playAction(ctx, i.user.id, roundId, version, { type: action, arg }, viewer);
+      let played: ReturnType<typeof playAction>;
+      try {
+        played = playAction(ctx, i.user.id, roundId, version, { type: action, arg }, viewer);
+      } catch (err) {
+        // Botón desactualizado (doble clic, un mensaje que no se llegó a editar, otra copia del bot):
+        // en vez de dejar el mensaje trabado, se pone al día con el estado real de la partida.
+        if ((err instanceof StaleActionError || err instanceof RoundOverError) && (await resyncRound(app, i, roundId, err instanceof RoundOverError))) return;
+        throw err;
+      }
+      const { view, frames, final } = played;
       if (live && view.settled) {
         // Crash: el resultado pasa por la cola del vuelo para que ninguna edición vieja lo pise.
         await i.deferUpdate();
