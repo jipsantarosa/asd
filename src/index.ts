@@ -21,6 +21,7 @@ import { createActivityListener } from './discord/casino/activity';
 import { forgetChannel } from './casino/guilds';
 import { autoSyncLayouts } from './discord/setupMaintenance';
 import { startServerTools } from './discord/commands/serverTools';
+import { startAutoRole } from './discord/commands/autoRole';
 import path from 'node:path';
 
 async function main(): Promise<void> {
@@ -74,6 +75,8 @@ async function main(): Promise<void> {
   registerLogEvents(client, ctx);
   // Mensajes de boost (/boosttracker) y protección de webhooks (/anti-webhooks).
   startServerTools(app);
+  // Rol automático para quienes entran (/autorol).
+  startAutoRole(app);
   client.on(Events.Error, (e) => logger.error('Error del cliente:', e));
 
   // Un canal borrado deja de figurar en los ajustes del casino.

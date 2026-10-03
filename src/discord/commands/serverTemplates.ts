@@ -3,6 +3,7 @@ import {
   GuildVerificationLevel, InteractionContextType, OAuth2Scopes, OverwriteType, PermissionFlagsBits, SlashCommandBuilder,
   type CategoryChannel, type Guild, type GuildBasedChannel, type GuildChannelCreateOptions, type GuildMember, type OverwriteResolvable, type Role,
 } from 'discord.js';
+import { getAutoRoles, setAutoRole, type AutoRoles } from '../../services/autoRole';
 import { getBoostConfig, saveBoostConfig } from '../../services/boost';
 import { GameError } from '../../services/context';
 import { getSettings } from '../../services/guildSettings';
@@ -20,6 +21,8 @@ import { logSystem } from '../logging/sender';
 import { isOwner } from '../owner';
 import { cid } from '../ui/ids';
 import { publicGroupMessage } from '../ui/rolesPanel';
+import { roleProblem } from '../roleSafety';
+import { applyAutoRolesToAll } from './autoRole';
 import { COLORS, clean } from '../ui/theme';
 import { setupTempVoice } from '../voice/tempVoice';
 import type { Command, CommandContext } from './types';
@@ -54,7 +57,7 @@ export function botInvite(app: App): string {
 
 // ───────────────────────── foto del servidor ─────────────────────────
 
-export async function snapshotGuild(guild: Guild): Promise<GuildSnapshot> {
+export async function snapshotGuild(guild: Guild, autoRoles: AutoRoles | null = null): Promise<GuildSnapshot> {
   await guild.roles.fetch();
   await guild.channels.fetch();
   return {
@@ -84,6 +87,7 @@ export async function snapshotGuild(guild: Guild): Promise<GuildSnapshot> {
     contentFilter: guild.explicitContentFilter,
     notifications: guild.defaultMessageNotifications,
     community: guild.features.includes('COMMUNITY'),
+    autoRoles: autoRoles ?? undefined,
   };
 }
 
@@ -123,10 +127,13 @@ export async function previewPanel(app: App, guild: Guild, owner: string, name: 
   if (tpl.bot?.logs) extras.push('📜 Configura los registros (`/setup`)');
   if (tpl.bot?.tempVoice) extras.push('🔊 Configura la voz temporal (`/voz`)');
   if (tpl.categories.some((c) => c.channels.some((ch) => ch.role === 'boost'))) extras.push('🚀 Activa el boost tracker');
+  for (const r of tpl.roles.filter((x) => x.autoRole)) {
+    extras.push(`👤 Autorol: ${r.autoRole === 'bots' ? 'los bots que se agreguen' : 'las personas que entren'} reciben **${clean(r.name)}**`);
+  }
   const embed = new EmbedBuilder()
     .setColor(COLORS.settings)
     .setTitle(`🏗️ ${clean(tpl.name)}`)
-    .setDescription(`${tpl.description ? `${clean(tpl.description)}\n\n` : ''}Esto se va a crear en **${clean(guild.name)}**. **No se borra ni se modifica nada que ya exista**: lo que tenga el mismo nombre se reutiliza.`)
+    .setDescription(`${tpl.description ? `${clean(tpl.description)}\n\n` : ''}Esto se va a crear en **${clean(guild.name)}**.\n• **✅ Crear todo:** no borra nada; lo que tenga el mismo nombre se reutiliza.\n• **🗑️ Borrar canales y crear:** primero borra **todos** los canales y categorías del servidor (los roles se conservan).`)
     .addFields(
       { name: `🎭 Roles nuevos (${plan.createRoles.length})`, value: list(plan.createRoles.map((r) => r.name)) },
       { name: `📁 Categorías nuevas (${plan.createCategories.length})`, value: list(plan.createCategories) },
@@ -139,7 +146,29 @@ export async function previewPanel(app: App, guild: Guild, owner: string, name: 
     embeds: [embed],
     components: [row(
       new ButtonBuilder().setCustomId(cid('tp', 'go', owner, name)).setLabel('Crear todo').setEmoji('✅').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(cid('tp', 'wipe', owner, name)).setLabel('Borrar canales y crear').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(cid('tp', 'no', owner)).setLabel('Cancelar').setStyle(ButtonStyle.Secondary),
+    )],
+  };
+}
+
+/** Segunda confirmación antes de borrar los canales. */
+export function wipeConfirmPanel(guild: Guild, owner: string, name: string): Panel {
+  const all = [...guild.channels.cache.values()].filter((c) => !c.isThread());
+  const cats = all.filter((c) => c.type === ChannelType.GuildCategory).length;
+  return {
+    embeds: [new EmbedBuilder()
+      .setColor(COLORS.error)
+      .setTitle('⚠️ ¿Borrar todos los canales?')
+      .setDescription([
+        `Se van a borrar **${all.length - cats} canales** y **${cats} categorías** de **${clean(guild.name)}**, **con todos sus mensajes**. Los mensajes borrados no se pueden recuperar.`,
+        '',
+        'Los roles y los miembros no se tocan.',
+        'Antes de borrar, guardo la estructura actual (canales, categorías y permisos) como plantilla **respaldo-…**, así la podés volver a crear con `/plantilla pegar`.',
+      ].join('\n'))],
+    components: [row(
+      new ButtonBuilder().setCustomId(cid('tp', 'wipeok', owner, name)).setLabel('Sí, borrar todo y crear').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(cid('tp', 'back', owner, name)).setLabel('Volver').setStyle(ButtonStyle.Secondary),
     )],
   };
 }
@@ -152,6 +181,9 @@ export interface ApplyReport {
   channels: number;
   messages: number;
   reused: number;
+  deleted: number;
+  /** Canal donde se publica el resultado si se borró el canal donde se usó el comando. */
+  reportChannelId: string | null;
   notes: string[];
   warnings: string[];
 }
@@ -160,7 +192,26 @@ function textBased(ch: GuildBasedChannel | undefined): ch is GuildBasedChannel &
   return !!ch && ch.isTextBased() && 'send' in ch;
 }
 
-export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate, executor: GuildMember): Promise<ApplyReport> {
+/** Borra canales (primero los de adentro, después las categorías). Devuelve los que Discord no dejó borrar. */
+async function deleteChannels(channels: GuildBasedChannel[], reason: string, report: ApplyReport): Promise<GuildBasedChannel[]> {
+  const left: GuildBasedChannel[] = [];
+  const ordered = [...channels.filter((c) => c.type !== ChannelType.GuildCategory), ...channels.filter((c) => c.type === ChannelType.GuildCategory)];
+  for (const ch of ordered) {
+    if (ch.isThread() || !ch.deletable) {
+      left.push(ch);
+      continue;
+    }
+    try {
+      await ch.delete(reason);
+      report.deleted++;
+    } catch {
+      left.push(ch);
+    }
+  }
+  return left;
+}
+
+export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate, executor: GuildMember, opts: { wipe?: boolean } = {}): Promise<ApplyReport> {
   const me = guild.members.me ?? (await guild.members.fetchMe());
   const need: [bigint, string][] = [[F.ManageRoles, 'Gestionar roles'], [F.ManageChannels, 'Gestionar canales'], [F.ViewChannel, 'Ver canales'], [F.SendMessages, 'Enviar mensajes'], [F.EmbedLinks, 'Insertar enlaces']];
   const missing = need.filter(([f]) => !me.permissions.has(f)).map(([, n]) => n);
@@ -169,7 +220,19 @@ export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate,
   await guild.channels.fetch();
 
   const reason = `Plantilla "${tpl.name}" (por ${executor.user.tag})`;
-  const report: ApplyReport = { roles: 0, categories: 0, channels: 0, messages: 0, reused: 0, notes: [], warnings: [] };
+  const report: ApplyReport = { roles: 0, categories: 0, channels: 0, messages: 0, reused: 0, deleted: 0, reportChannelId: null, notes: [], warnings: [] };
+  let leftovers: GuildBasedChannel[] = [];
+  if (opts.wipe) {
+    // Copia de seguridad de la estructura ANTES de borrar (si no se puede guardar, no se borra nada).
+    const d = new Date(app.ctx.now());
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    const backupName = `respaldo-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
+    const backup = snapshotToTemplate(await snapshotGuild(guild, getAutoRoles(app.ctx, guild.id)), backupName);
+    saveTemplate(app.ctx, backupName, backup, { by: executor.id, sourceGuild: guild.id, replace: true });
+    report.notes.push(`Guardé la estructura vieja como plantilla **${backupName}** (\`/plantilla pegar nombre:${backupName}\` la vuelve a crear).`);
+    leftovers = await deleteChannels([...guild.channels.cache.values()].filter((c) => !c.isThread()), `${reason} - borrar canales`, report);
+    await guild.channels.fetch();
+  }
   const admin = me.permissions.has(F.Administrator);
   // Sin Administrador, Discord no deja dar (ni negar en canales) permisos que el bot no tiene.
   const mask = (bits: bigint, what: string): bigint => {
@@ -199,6 +262,27 @@ export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate,
     } catch (err) {
       report.warnings.push(`No pude crear el rol **${clean(r.name)}**: ${(err as Error).message}`);
     }
+  }
+
+  // ── Autoroles (personas y bots por separado) ──
+  let autoChanged = false;
+  for (const kind of ['members', 'bots'] as const) {
+    const t = tpl.roles.find((r) => r.autoRole === kind);
+    const role = t ? roles.get(nameKey(t.name)) : undefined;
+    if (!t || !role) continue;
+    const label = kind === 'bots' ? 'bots' : 'personas';
+    const problem = roleProblem(guild, role);
+    const current = getAutoRoles(app.ctx, guild.id)[kind];
+    if (problem) report.warnings.push(`No pude activar el autorol de ${label} **${clean(role.name)}**: ${problem}.`);
+    else if (!current || !guild.roles.cache.has(current) || current === role.id) {
+      setAutoRole(app.ctx, guild.id, kind, role.id);
+      autoChanged = true;
+      report.notes.push(`Autorol de ${label}: <@&${role.id}>.`);
+    } else report.notes.push(`Ya había un autorol de ${label} (<@&${current}>); no lo cambié.`);
+  }
+  if (autoChanged) {
+    const r = await applyAutoRolesToAll(app, guild, 500).catch(() => null);
+    if (r && (r.members || r.bots)) report.notes.push(`Les di el autorol a ${r.members} personas y ${r.bots} bots que ya estaban${r.pending ? `; para el resto usá \`/autorol aplicar\`` : ''}.`);
   }
 
   const overwritesFor = (list: TplOverwrite[] | undefined, what: string, voice: boolean): OverwriteResolvable[] | undefined => {
@@ -347,6 +431,11 @@ export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate,
         }
       } else report.warnings.push('No activé la Comunidad: la plantilla necesita un canal de reglas y uno de avisos para moderadores.');
     }
+    if (community() && leftovers.length && rules?.type === ChannelType.GuildText && mod?.type === ChannelType.GuildText) {
+      // Discord no deja borrar los canales de reglas/avisos de la Comunidad: se pasan a los nuevos y se borran los viejos.
+      await guild.edit({ rulesChannel: rules.id, publicUpdatesChannel: mod.id, reason }).catch(() => undefined);
+      leftovers = await deleteChannels(leftovers, `${reason} - borrar canales`, report);
+    }
     if (community()) {
       for (const ch of toConvert) {
         if (ch.type !== ChannelType.GuildText) continue;
@@ -444,6 +533,9 @@ export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate,
       report.warnings.push(`No pude configurar la voz temporal: ${(err as Error).message}`);
     }
   }
+  if (leftovers.length) report.warnings.push(`No pude borrar ${leftovers.length} canal(es): ${leftovers.slice(0, 10).map((c) => `#${clean(c.name)}`).join(', ')} (permisos o los exige Discord).`);
+  const target = special.get('system') ?? [...created.values()].find((c) => c.type === ChannelType.GuildText);
+  report.reportChannelId = target?.id ?? null;
   return report;
 }
 
@@ -459,7 +551,7 @@ function reportPanel(tpl: ServerTemplate, r: ApplyReport): Panel {
   const e = new EmbedBuilder()
     .setColor(r.warnings.length ? COLORS.warn : COLORS.ok)
     .setTitle(`✅ Plantilla aplicada: ${clean(tpl.name)}`)
-    .setDescription(`Creé **${r.roles}** roles, **${r.categories}** categorías, **${r.channels}** canales y **${r.messages}** mensajes. Reutilicé **${r.reused}** cosas que ya existían. No borré nada.`);
+    .setDescription(`${r.deleted ? `Borré **${r.deleted}** canales y categorías viejos. ` : ''}Creé **${r.roles}** roles, **${r.categories}** categorías, **${r.channels}** canales y **${r.messages}** mensajes.${r.reused ? ` Reutilicé **${r.reused}** cosas que ya existían.` : ''}${r.deleted ? '' : ' No borré nada.'}`);
   if (r.notes.length) e.addFields({ name: '⚙️ Hecho', value: cut(r.notes) });
   if (r.warnings.length) e.addFields({ name: `⚠️ Avisos (${r.warnings.length})`, value: cut(r.warnings) });
   return { embeds: [e], components: [] };
@@ -469,17 +561,37 @@ function reportPanel(tpl: ServerTemplate, r: ApplyReport): Panel {
 
 export const templateHandler: Handler = async (app, i, id) => {
   requireOwner(i.user.id);
-  if (id.act === 'no') {
-    await update(i, { embeds: [new EmbedBuilder().setColor(COLORS.push).setDescription('Cancelado. No se creó nada.')], components: [] });
-    return;
+  const name = id.args[0] ?? '';
+  switch (id.act) {
+    case 'no':
+      await update(i, { embeds: [new EmbedBuilder().setColor(COLORS.push).setDescription('Cancelado. No se creó ni se borró nada.')], components: [] });
+      return;
+    case 'wipe':
+      await i.guild.channels.fetch();
+      await update(i, wipeConfirmPanel(i.guild, i.user.id, name));
+      return;
+    case 'back':
+      await update(i, await previewPanel(app, i.guild, i.user.id, name));
+      return;
+    case 'go':
+    case 'wipeok':
+      break;
+    default:
+      throw new GameError('Opción desconocida.');
   }
-  if (id.act !== 'go') throw new GameError('Opción desconocida.');
-  const { name, tpl } = resolveTemplate(app, id.args[0] ?? '');
-  await update(i, { embeds: [new EmbedBuilder().setColor(COLORS.settings).setDescription(`⏳ Armando **${clean(tpl.name)}**… puede tardar un par de minutos (Discord limita cuántos canales se crean por segundo).`)], components: [] });
-  const res = await app.guildLock.run(`template:${i.guild.id}`, () => applyTemplate(app, i.guild, tpl, i.member));
+  const wipe = id.act === 'wipeok';
+  const { tpl } = resolveTemplate(app, name);
+  await update(i, { embeds: [new EmbedBuilder().setColor(COLORS.settings).setDescription(`⏳ ${wipe ? 'Borrando los canales y armando' : 'Armando'} **${clean(tpl.name)}**… puede tardar un par de minutos (Discord limita cuántos canales se crean por segundo).`)], components: [] });
+  const res = await app.guildLock.run(`template:${i.guild.id}`, () => applyTemplate(app, i.guild, tpl, i.member, { wipe }));
   if (!res.ran) throw new GameError('Ya se está aplicando una plantilla en este servidor. Esperá a que termine.');
-  await i.editReply({ ...reportPanel(tpl, res.value), allowedMentions: { parse: [] } });
-  await logSystem(app.ctx, i.guild, `🏗️ <@${i.user.id}> aplicó la plantilla **${clean(name)}**.`, COLORS.ok);
+  const panel = reportPanel(tpl, res.value);
+  // Si se borró el canal donde se usó el comando, la respuesta privada ya no se ve: el resultado va a un canal nuevo.
+  const shown = await i.editReply({ ...panel, allowedMentions: { parse: [] } }).then(() => true, () => false);
+  const target = res.value.reportChannelId ? i.guild.channels.cache.get(res.value.reportChannelId) : null;
+  if ((wipe || !shown) && target?.isTextBased() && 'send' in target) {
+    await target.send({ content: `<@${i.user.id}>`, embeds: panel.embeds, allowedMentions: { users: [i.user.id] } }).catch(() => undefined);
+  }
+  await logSystem(app.ctx, i.guild, `🏗️ <@${i.user.id}> aplicó la plantilla **${clean(name)}**${wipe ? ` (borró ${res.value.deleted} canales viejos)` : ''}.`, COLORS.ok);
 };
 
 // ───────────────────────── comandos ─────────────────────────
@@ -558,7 +670,7 @@ export const plantillaCmd: Command = {
     switch (action) {
       case 'copiar': {
         await c.defer(true);
-        const tpl = snapshotToTemplate(await snapshotGuild(c.guild), name());
+        const tpl = snapshotToTemplate(await snapshotGuild(c.guild, getAutoRoles(c.app.ctx, c.guild.id)), name());
         const saved = saveTemplate(c.app.ctx, name(), tpl, { by: c.member.id, sourceGuild: c.guild.id, replace });
         const st = templateStats(tpl);
         await c.reply({

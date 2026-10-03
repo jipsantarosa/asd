@@ -114,7 +114,7 @@ describe('migración 11', () => {
     db.run("INSERT INTO casino_users (user_id, created_at, last_active_at, updated_at) VALUES (?, 0, 0, 0)", U);
     db.run("INSERT INTO casino_wallets (user_id, currency, balance, updated_at) VALUES (?, 'coins', 50, 0)", U);
     db.run("INSERT INTO casino_transactions (tx_id, user_id, amount, balance_before, balance_after, type, created_at) VALUES ('t1', ?, 50, 0, 50, 'BONUS', 0)", U);
-    assert.deepEqual(runMigrations(db, 0), [11, 12, 13, 14]);
+    assert.deepEqual(runMigrations(db, 0), [11, 12, 13, 14, 15]);
     const ctx = createContext({ db });
     const c = getCasinoConfig(ctx);
     assert.equal(c.daily.amount, 100);

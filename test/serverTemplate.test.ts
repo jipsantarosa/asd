@@ -43,6 +43,20 @@ describe('plantillas de servidor: plantilla incluida', () => {
   it('las Coins se presentan como virtuales', () => {
     assert.match(JSON.stringify(tpl), /virtual/i);
   });
+
+  it('nombres simples: sin emojis en roles, categorías ni canales', () => {
+    const emoji = /\p{Extended_Pictographic}/u;
+    const names = [...tpl.roles.map((r) => r.name), ...tpl.categories.map((c) => c.name), ...tpl.categories.flatMap((c) => c.channels.map((ch) => ch.name))];
+    for (const n of names) assert.ok(!emoji.test(n), n);
+    // Ningún nombre de canal choca con otro (los {#canal} de los mensajes apuntan a uno solo).
+    const keys = tpl.categories.flatMap((c) => c.channels.map((ch) => nameKey(ch.name)));
+    assert.equal(new Set(keys).size, keys.length);
+  });
+
+  it('autorol separado: Miembro para personas y Bots para bots', () => {
+    assert.equal(tpl.roles.find((r) => r.autoRole === 'members')?.name, 'Miembro');
+    assert.equal(tpl.roles.find((r) => r.autoRole === 'bots')?.name, 'Bots');
+  });
 });
 
 describe('plantillas de servidor: validación', () => {
@@ -58,6 +72,12 @@ describe('plantillas de servidor: validación', () => {
     expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'Mod' }, { name: '🛡️ mod' }] }), /repetido/);
     expectGameError(() => parseTemplate({ ...base, channels: [{ name: 'a', type: 'text', messages: [{ footer: 'solo pie' }] }] }), /mensaje 1/);
     expectGameError(() => parseTemplate({ ...base, channels: [{ name: 'a', type: 'text', messages: [{ content: 'hola', buttons: [{ label: 'x', url: 'javascript:alert(1)' }] }] }] }), /https/);
+  });
+
+  it('autoRole: "members" o "bots", uno de cada uno', () => {
+    expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'A', autoRole: true }] }), /members.*bots/);
+    expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'A', autoRole: 'members' }, { name: 'B', autoRole: 'members' }] }), /solo un rol/);
+    assert.equal(parseTemplate({ ...base, roles: [{ name: 'A', autoRole: 'members' }, { name: 'B', autoRole: 'bots' }] }).roles[1].autoRole, 'bots');
   });
 
   it('respeta los límites de Discord', () => {
@@ -101,6 +121,7 @@ describe('plantillas de servidor: copiar y pegar', () => {
     ],
     rulesChannelId: '11',
     verification: 2,
+    autoRoles: { members: '4', bots: null },
   };
 
   it('copia roles (sin @everyone ni bots), categorías, canales en orden y permisos por rol', () => {
@@ -114,6 +135,8 @@ describe('plantillas de servidor: copiar y pegar', () => {
     assert.deepEqual(reglas.overwrites, [{ role: '@everyone', deny: ['SendMessages'] }]);
     assert.equal(tpl.categories[0].channels[2].userLimit, 10);
     assert.equal(tpl.settings?.verification, 'medium');
+    assert.equal(tpl.roles[1].autoRole, 'members');
+    assert.equal(tpl.roles[0].autoRole, undefined);
   });
 
   it('pegar reutiliza lo que ya existe y solo crea lo que falta (nunca borra)', () => {

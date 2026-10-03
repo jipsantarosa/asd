@@ -14,6 +14,7 @@ import { stealCmd, stealContextMenu } from './steal';
 import { divorceCmd, marryCmd, profileCmd, setlangCmd } from './social';
 import { antiWebhooksCmd, boostTrackerCmd } from './serverTools';
 import { plantillaCmd, setupDiscordCmd } from './serverTemplates';
+import { autoRoleCmd } from './autoRole';
 import type { Command } from './types';
 import { canalCmd, vozCmd } from './voice';
 import { MODERATION_COMMANDS } from './moderation';
@@ -106,7 +107,7 @@ const setup: Command = {
 
 export const COMMANDS: Command[] = [
   ...CASINO_COMMANDS,
-  profileCmd, marryCmd, divorceCmd, setlangCmd, boostTrackerCmd, antiWebhooksCmd, setupDiscordCmd, plantillaCmd,
+  profileCmd, marryCmd, divorceCmd, setlangCmd, boostTrackerCmd, antiWebhooksCmd, setupDiscordCmd, plantillaCmd, autoRoleCmd,
   ayuda, prefijo, ajustes, roles, setup, stealCmd, purgar, avatares, banners, kissCmd, besosCmd,
   premiumCmd, namesCmd, tagsCmd, clearAvatarsCmd, clearNamesCmd, clearTagsCmd, mstatsCmd, ghostCmd, botProfileCmd,
   vozCmd, canalCmd, ...MODERATION_COMMANDS,

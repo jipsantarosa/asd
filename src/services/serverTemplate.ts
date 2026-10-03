@@ -30,6 +30,8 @@ export interface TplRole {
   selfAssign?: boolean;
   /** Se le da a quien pega la plantilla (p. ej. "Fundador"). */
   giveToExecutor?: boolean;
+  /** Rol automático (/autorol): "members" lo reciben las personas que entran y "bots" los bots. Uno de cada uno. */
+  autoRole?: 'members' | 'bots';
 }
 
 export interface TplButton {
@@ -288,8 +290,11 @@ export function parseTemplate(raw: unknown): ServerTemplate {
       permissions: perms(cc, r.permissions, 'permissions'),
       selfAssign: bool(cc, r.selfAssign, 'selfAssign'),
       giveToExecutor: bool(cc, r.giveToExecutor, 'giveToExecutor'),
+      autoRole: r.autoRole === undefined || r.autoRole === null ? undefined
+        : r.autoRole === 'members' || r.autoRole === 'bots' ? r.autoRole : cc.fail('"autoRole" tiene que ser "members" o "bots".'),
     });
   });
+  for (const k of ['members', 'bots'] as const) if (roles.filter((r) => r.autoRole === k).length > 1) c.fail(`solo un rol puede tener "autoRole": "${k}".`);
   const seenRoles = new Set<string>();
   for (const r of roles) {
     const k = nameKey(r.name);
@@ -381,6 +386,8 @@ export interface GuildSnapshot {
     overwrites: { id: string; type: 'role' | 'member'; allow: bigint; deny: bigint }[];
   }[];
   systemChannelId?: string | null;
+  /** Roles automáticos configurados con /autorol (se copian como "autoRole"). */
+  autoRoles?: { members: string | null; bots: string | null };
   rulesChannelId?: string | null;
   modUpdatesChannelId?: string | null;
   verification?: number;
@@ -417,6 +424,7 @@ export function snapshotToTemplate(s: GuildSnapshot, name: string): ServerTempla
       hoist: r.hoist || undefined,
       mentionable: r.mentionable || undefined,
       permissions: r.permissions ? permNames(r.permissions) : undefined,
+      autoRole: r.id === s.autoRoles?.members ? 'members' : r.id === s.autoRoles?.bots ? 'bots' : undefined,
     }));
   }
   const ows = (list: GuildSnapshot['channels'][number]['overwrites']): TplOverwrite[] | undefined => {
@@ -582,16 +590,16 @@ const C = { gold: 0xf1c40f, red: 0xe74c3c, blue: 0x3498db, green: 0x2ecc71, purp
 
 const READ_ONLY: TplOverwrite[] = [
   { role: '@everyone', allow: ['ViewChannel', 'ReadMessageHistory', 'AddReactions'], deny: ['SendMessages', 'SendMessagesInThreads', 'CreatePublicThreads', 'CreatePrivateThreads'] },
-  { role: '🛠️ Staff', allow: ['SendMessages'] },
+  { role: 'Staff', allow: ['SendMessages'] },
 ];
 const STAFF_ONLY: TplOverwrite[] = [
   { role: '@everyone', deny: ['ViewChannel'] },
-  { role: '🛠️ Staff', allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'Connect', 'Speak'] },
+  { role: 'Staff', allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'Connect', 'Speak'] },
 ];
 
 /**
  * Servidor oficial del bot: presentación, invitación, anuncios y novedades, casino para probarlo, comunidad,
- * soporte y una zona privada del staff. Lo crea /setupdiscord.
+ * soporte y una zona privada del staff. Nombres simples, sin emojis. Lo crea /setupdiscord.
  */
 export function botServerTemplate(): ServerTemplate {
   return parseTemplate({
@@ -600,104 +608,100 @@ export function botServerTemplate(): ServerTemplate {
     name: 'Servidor oficial del bot',
     description: 'Servidor de soporte y promoción: anuncios, novedades, invitación, casino para probar, comunidad y soporte.',
     roles: [
-      { name: '👑 Fundador', color: C.gold, hoist: true, permissions: ['Administrator'], giveToExecutor: true },
-      { name: '🛠️ Staff', color: C.red, hoist: true, mentionable: true, permissions: ['ViewAuditLog', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'KickMembers', 'ModerateMembers', 'MuteMembers', 'MoveMembers', 'DeafenMembers', 'MentionEveryone'] },
-      { name: '🧰 Soporte', color: C.blue, hoist: true, mentionable: true, permissions: ['ManageMessages', 'ManageThreads', 'ModerateMembers'] },
-      { name: '🤝 Partner', color: C.teal, hoist: true },
-      { name: '💎 VIP', color: C.pink, hoist: true },
-      { name: '🧪 Beta tester', color: C.purple, selfAssign: true },
-      { name: '📢 Anuncios', color: C.orange, mentionable: true, selfAssign: true },
-      { name: '🆕 Novedades', color: C.green, mentionable: true, selfAssign: true },
-      { name: '🏆 Torneos', color: C.gold, mentionable: true, selfAssign: true },
-      { name: '🎁 Sorteos', color: C.pink, mentionable: true, selfAssign: true },
-      { name: '🤖 Bots', color: C.gray, hoist: true },
-      { name: '👤 Miembro', color: C.gray },
+      { name: 'Fundador', color: C.gold, hoist: true, permissions: ['Administrator'], giveToExecutor: true },
+      { name: 'Staff', color: C.red, hoist: true, mentionable: true, permissions: ['ViewAuditLog', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'KickMembers', 'ModerateMembers', 'MuteMembers', 'MoveMembers', 'DeafenMembers', 'MentionEveryone'] },
+      { name: 'Soporte', color: C.blue, hoist: true, mentionable: true, permissions: ['ManageMessages', 'ManageThreads', 'ModerateMembers'] },
+      { name: 'Partner', color: C.teal, hoist: true },
+      { name: 'VIP', color: C.pink, hoist: true },
+      { name: 'Beta tester', color: C.purple, selfAssign: true },
+      { name: 'Anuncios', color: C.orange, mentionable: true, selfAssign: true },
+      { name: 'Novedades', color: C.green, mentionable: true, selfAssign: true },
+      { name: 'Torneos', color: C.gold, mentionable: true, selfAssign: true },
+      { name: 'Sorteos', color: C.pink, mentionable: true, selfAssign: true },
+      { name: 'Bots', color: C.gray, hoist: true, autoRole: 'bots' },
+      { name: 'Miembro', color: C.gray, autoRole: 'members' },
     ],
     channels: [],
     categories: [
       {
-        name: '📌 Información',
+        name: 'Información',
         channels: [
           {
-            name: '👋・bienvenida', type: 'text', role: 'system', topic: 'Bienvenidos al servidor oficial de {bot}.', overwrites: READ_ONLY,
+            name: 'bienvenida', type: 'text', role: 'system', topic: 'Bienvenidos al servidor oficial de {bot}.', overwrites: READ_ONLY,
             messages: [{
-              title: '🎰 Bienvenido al servidor oficial de {bot}',
-              description: '**{bot}** es un casino **virtual** para Discord: juegos con botones y animaciones, economía, trabajos, ranking, torneos, logros, casamientos y mucho más.\n\n🪙 Todo usa **Coins**, una moneda interna: no se compra, no se vende y no se cambia por dinero real.\n\n**Para empezar:**\n• Leé {#📜・reglas}\n• Elegí tus notificaciones en {#🎭・roles}\n• Probá el bot en {#🎲・casino}\n• ¿Lo querés en tu servidor? {#🔗・invitar-bot}',
+              title: 'Bienvenido al servidor oficial de {bot}',
+              description: '**{bot}** es un casino **virtual** para Discord: juegos con botones, economía, trabajos, ranking, torneos, logros, casamientos y más.\n\nTodo usa **Coins**, una moneda interna: no se compra, no se vende y no se cambia por dinero real.\n\n**Para empezar:**\n• Leé {#reglas}\n• Elegí tus notificaciones en {#roles}\n• Probá el bot en {#casino}\n• ¿Lo querés en tu servidor? {#invitar-bot}',
               color: C.gold,
               footer: '{server}',
-              buttons: [{ label: 'Invitar a {bot}', url: '{invite}', emoji: '🔗' }],
+              buttons: [{ label: 'Invitar a {bot}', url: '{invite}' }],
             }],
           },
           {
-            name: '📜・reglas', type: 'text', role: 'rules', overwrites: READ_ONLY,
+            name: 'reglas', type: 'text', role: 'rules', overwrites: READ_ONLY,
             messages: [{
-              title: '📜 Reglas del servidor',
-              description: '**1.** Respeto ante todo: nada de insultos, acoso, discriminación ni discursos de odio.\n**2.** Sin spam, flood ni publicidad sin permiso (fuera de {#🤝・partners}).\n**3.** Nada de contenido NSFW, gore ni ilegal.\n**4.** Las Coins son **virtuales**: está prohibido comprarlas, venderlas o intercambiarlas por dinero real o por cosas fuera del bot.\n**5.** Nada de multicuentas, bots ni scripts para farmear la economía.\n**6.** Usá cada canal para lo que es; los comandos van en {#🤖・comandos} y {#🎲・casino}.\n**7.** Seguí los [Términos de Servicio](https://discord.com/terms) y las [Normas de la Comunidad](https://discord.com/guidelines) de Discord.\n**8.** El staff tiene la última palabra. Si tenés un problema, abrí una consulta en {#❓・soporte}.',
+              title: 'Reglas del servidor',
+              description: '**1.** Respeto ante todo: nada de insultos, acoso, discriminación ni discursos de odio.\n**2.** Sin spam, flood ni publicidad sin permiso (fuera de {#partners}).\n**3.** Nada de contenido NSFW, gore ni ilegal.\n**4.** Las Coins son **virtuales**: está prohibido comprarlas, venderlas o intercambiarlas por dinero real o por cosas fuera del bot.\n**5.** Nada de multicuentas, bots ni scripts para farmear la economía.\n**6.** Usá cada canal para lo que es; los comandos van en {#comandos} y {#casino}.\n**7.** Seguí los [Términos de Servicio](https://discord.com/terms) y las [Normas de la Comunidad](https://discord.com/guidelines) de Discord.\n**8.** El staff tiene la última palabra. Si tenés un problema, escribí en {#soporte}.',
               color: C.red,
               footer: 'Al participar aceptás estas reglas.',
             }],
           },
           {
-            name: '📢・anuncios', type: 'announcement', topic: 'Anuncios oficiales de {bot}.', overwrites: READ_ONLY,
+            name: 'anuncios', type: 'announcement', topic: 'Anuncios oficiales de {bot}.', overwrites: READ_ONLY,
             messages: [{
-              title: '🎉 ¡Abrimos el servidor oficial!',
-              description: 'Este es el lugar oficial de **{bot}**: acá vas a encontrar los anuncios, las novedades de cada versión, torneos y soporte.\n\nActivá {@&📢 Anuncios} en {#🎭・roles} para que te avisemos de lo importante.',
+              title: '¡Abrimos el servidor oficial!',
+              description: 'Este es el lugar oficial de **{bot}**: anuncios, novedades de cada versión, torneos y soporte.\n\nActivá {@&Anuncios} en {#roles} para que te avisemos de lo importante.',
               color: C.orange,
             }],
           },
           {
-            name: '🆕・novedades', type: 'announcement', topic: 'Changelog: qué trae cada actualización del bot.', overwrites: READ_ONLY,
+            name: 'novedades', type: 'announcement', topic: 'Qué trae cada actualización del bot.', overwrites: READ_ONLY,
             messages: [{
-              title: '🆕 Novedades',
-              description: 'Acá se publica qué cambia en cada actualización de **{bot}**.\n\n**Lo que ya trae:**\n🎲 10 juegos de casino con botones y animaciones\n💼 `{prefix}work` con trabajos (de Cirujeando a Hacker)\n📅 Recompensas diarias y semanales\n🏆 Ranking, torneos y logros\n💍 `{prefix}marry`, `{prefix}kiss` y `{prefix}profile`\n🚀 Boost tracker y 🪝 anti-webhooks\n🌐 Español e inglés (`{prefix}setlang`)\n\nActivá {@&🆕 Novedades} en {#🎭・roles} para enterarte de cada versión.',
+              title: 'Novedades',
+              description: 'Acá se publica qué cambia en cada actualización de **{bot}**.\n\n**Lo que ya trae:**\n• 10 juegos de casino con botones y animaciones\n• `{prefix}work` con trabajos (de Cirujeando a Hacker)\n• Recompensas diarias y semanales\n• Ranking, torneos y logros\n• `{prefix}marry`, `{prefix}kiss` y `{prefix}profile`\n• Boost tracker, anti-webhooks y autorol\n• Español e inglés (`{prefix}setlang`)\n\nActivá {@&Novedades} en {#roles} para enterarte de cada versión.',
               color: C.green,
             }],
           },
           {
-            name: '🔗・invitar-bot', type: 'text', topic: 'Agregá {bot} a tu servidor.', overwrites: READ_ONLY,
+            name: 'invitar-bot', type: 'text', topic: 'Agregá {bot} a tu servidor.', overwrites: READ_ONLY,
             messages: [{
-              title: '🔗 Llevá {bot} a tu servidor',
-              description: '1. Tocá **Invitar** y elegí tu servidor (necesitás *Gestionar servidor*).\n2. Escribí `/ayuda` para ver todo lo que hace.\n3. Configurá los registros con `/setup` y la voz temporal con `/voz`.\n\n¿Dudas? Preguntá en {#❓・soporte}.',
+              title: 'Llevá {bot} a tu servidor',
+              description: '1. Tocá **Invitar** y elegí tu servidor (necesitás *Gestionar servidor*).\n2. Escribí `/ayuda` para ver todo lo que hace.\n3. Configurá los registros con `/setup` y la voz temporal con `/voz`.\n\n¿Dudas? Preguntá en {#soporte}.',
               color: C.blue,
-              buttons: [{ label: 'Invitar', url: '{invite}', emoji: '🤖' }],
+              buttons: [{ label: 'Invitar', url: '{invite}' }],
             }],
           },
-          {
-            name: '🎭・roles', type: 'text', role: 'selfRoles', topic: 'Elegí qué avisos querés recibir.', overwrites: READ_ONLY,
-          },
-          {
-            name: '🚀・boosts', type: 'text', role: 'boost', topic: 'Gracias a quienes boostean el servidor 💖', overwrites: READ_ONLY,
-          },
+          { name: 'roles', type: 'text', role: 'selfRoles', topic: 'Elegí qué avisos querés recibir.', overwrites: READ_ONLY },
+          { name: 'boosts', type: 'text', role: 'boost', topic: 'Gracias a quienes boostean el servidor.', overwrites: READ_ONLY },
         ],
       },
       {
-        name: '🎰 Casino',
+        name: 'Casino',
         channels: [
-          { name: '🎲・casino', type: 'text', topic: 'Jugá con `/casino`. Coins 100% virtuales.' },
-          { name: '💼・trabajos', type: 'text', topic: 'Trabajá con `{prefix}work`, cobrá tu `{prefix}daily` y tu semanal.', slowmode: 3 },
-          { name: '🏆・torneos', type: 'text', topic: 'Torneos del casino y sus resultados.', overwrites: READ_ONLY },
-          { name: '🎁・sorteos', type: 'text', topic: 'Sorteos y eventos (siempre con Coins virtuales).', overwrites: READ_ONLY },
+          { name: 'casino', type: 'text', topic: 'Jugá con `/casino`. Coins 100% virtuales.' },
+          { name: 'trabajos', type: 'text', topic: 'Trabajá con `{prefix}work`, cobrá tu `{prefix}daily` y tu semanal.', slowmode: 3 },
+          { name: 'torneos', type: 'text', topic: 'Torneos del casino y sus resultados.', overwrites: READ_ONLY },
+          { name: 'sorteos', type: 'text', topic: 'Sorteos y eventos (siempre con Coins virtuales).', overwrites: READ_ONLY },
         ],
       },
       {
-        name: '💬 Comunidad',
+        name: 'Comunidad',
         channels: [
-          { name: '💬・general', type: 'text', topic: 'Charla general. Respeto ante todo.' },
-          { name: '🤖・comandos', type: 'text', topic: 'Usá los comandos del bot acá.' },
-          { name: '📸・media', type: 'text', topic: 'Imágenes, clips y memes.', slowmode: 5 },
-          { name: '💡・sugerencias', type: 'forum', topic: 'Una sugerencia por publicación. Votá con reacciones.' },
-          { name: '🤝・partners', type: 'text', topic: 'Servidores aliados. Para ser partner, abrí una consulta en soporte.', overwrites: READ_ONLY },
+          { name: 'general', type: 'text', topic: 'Charla general. Respeto ante todo.' },
+          { name: 'comandos', type: 'text', topic: 'Usá los comandos del bot acá.' },
+          { name: 'media', type: 'text', topic: 'Imágenes, clips y memes.', slowmode: 5 },
+          { name: 'sugerencias', type: 'forum', topic: 'Una sugerencia por publicación. Votá con reacciones.' },
+          { name: 'partners', type: 'text', topic: 'Servidores aliados. Para ser partner, escribí en soporte.', overwrites: READ_ONLY },
         ],
       },
       {
-        name: '🆘 Soporte',
+        name: 'Soporte',
         channels: [
           {
-            name: '📖・preguntas-frecuentes', type: 'text', topic: 'Respuestas rápidas.', overwrites: READ_ONLY,
+            name: 'preguntas-frecuentes', type: 'text', topic: 'Respuestas rápidas.', overwrites: READ_ONLY,
             messages: [{
-              title: '📖 Preguntas frecuentes',
+              title: 'Preguntas frecuentes',
               color: C.blue,
-              description: 'Antes de preguntar en {#❓・soporte}, fijate si tu duda está acá.',
+              description: 'Antes de preguntar en {#soporte}, fijate si tu duda está acá.',
               fields: [
                 { name: '¿Las Coins se pueden comprar o vender?', value: 'No. Son **virtuales**: no se compran, no se retiran y no se cambian por dinero real.' },
                 { name: '¿Cómo gano Coins?', value: '`{prefix}daily`, `{prefix}weekly` y `{prefix}work`. La economía es difícil a propósito.' },
@@ -707,27 +711,27 @@ export function botServerTemplate(): ServerTemplate {
               ],
             }],
           },
-          { name: '❓・soporte', type: 'text', topic: 'Contanos tu problema con detalle (servidor, comando y qué pasó).', slowmode: 10 },
-          { name: '🐛・reportar-bugs', type: 'forum', topic: 'Un bug por publicación: qué hiciste, qué esperabas y qué pasó.' },
+          { name: 'soporte', type: 'text', topic: 'Contanos tu problema con detalle (servidor, comando y qué pasó).', slowmode: 10 },
+          { name: 'reportar-bugs', type: 'forum', topic: 'Un bug por publicación: qué hiciste, qué esperabas y qué pasó.' },
         ],
       },
       {
-        name: '🔊 Voz',
+        name: 'Voz',
         channels: [
-          { name: '🔊 General', type: 'voice' },
-          { name: '🎮 Gaming', type: 'voice' },
-          { name: '🎵 Música', type: 'voice' },
-          { name: '🎙️ Soporte por voz', type: 'voice', userLimit: 5 },
+          { name: 'Sala general', type: 'voice' },
+          { name: 'Gaming', type: 'voice' },
+          { name: 'Música', type: 'voice' },
+          { name: 'Ayuda por voz', type: 'voice', userLimit: 5 },
         ],
       },
       {
-        name: '🛡️ Staff',
+        name: 'Staff',
         overwrites: STAFF_ONLY,
         channels: [
-          { name: '🛡️・staff-chat', type: 'text', overwrites: STAFF_ONLY },
-          { name: '📋・avisos-discord', type: 'text', role: 'modUpdates', overwrites: STAFF_ONLY, topic: 'Avisos de Discord para la moderación.' },
-          { name: '🧪・pruebas-bot', type: 'text', overwrites: STAFF_ONLY, topic: 'Probar comandos y versiones nuevas del bot.' },
-          { name: '🔒 Staff', type: 'voice', overwrites: STAFF_ONLY },
+          { name: 'staff-chat', type: 'text', overwrites: STAFF_ONLY },
+          { name: 'avisos-discord', type: 'text', role: 'modUpdates', overwrites: STAFF_ONLY, topic: 'Avisos de Discord para la moderación.' },
+          { name: 'pruebas-bot', type: 'text', overwrites: STAFF_ONLY, topic: 'Probar comandos y versiones nuevas del bot.' },
+          { name: 'Sala staff', type: 'voice', overwrites: STAFF_ONLY },
         ],
       },
     ],

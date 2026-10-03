@@ -114,3 +114,20 @@ describe('idioma', () => {
     assert.match(t('es', 'marry.accepted', { a: 'A', b: 'B' }), /A y B se casaron/);
   });
 });
+
+describe('autorol', () => {
+  it('personas y bots por separado, se desactivan por separado', async () => {
+    const { autoRoleFor, getAutoRoles, setAutoRole } = await import('../src/services/autoRole');
+    const w = makeWorld();
+    const R1 = '300000000000000001';
+    const R2 = '300000000000000002';
+    assert.deepEqual(getAutoRoles(w.ctx, G), { members: null, bots: null });
+    setAutoRole(w.ctx, G, 'members', R1);
+    setAutoRole(w.ctx, G, 'bots', R2);
+    assert.equal(autoRoleFor(w.ctx, G, false), R1);
+    assert.equal(autoRoleFor(w.ctx, G, true), R2);
+    setAutoRole(w.ctx, G, 'bots', null);
+    assert.deepEqual(getAutoRoles(w.ctx, G), { members: R1, bots: null });
+    expectGameError(() => setAutoRole(w.ctx, G, 'members', 'nope'), /inválido/);
+  });
+});

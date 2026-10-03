@@ -1067,6 +1067,19 @@ CREATE TABLE server_templates (
 );
 `,
   },
+  {
+    id: 15,
+    name: 'autorol',
+    sql: `
+-- Roles automáticos para quienes entran al servidor (/autorol): uno para personas y otro para bots.
+CREATE TABLE auto_roles (
+  guild_id    TEXT PRIMARY KEY,
+  member_role TEXT,
+  bot_role    TEXT,
+  updated_at  INTEGER NOT NULL
+);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {
