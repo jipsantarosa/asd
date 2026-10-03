@@ -243,8 +243,8 @@ Qué hace al ejecutarse:
 
 ## 9. Canales de voz temporales (`/voz`)
 
-1. `/voz` → **Configurar / reparar**. Crea (o recupera, sin duplicar) la categoría **🔊 Canales temporales**, el canal de voz **➕ Crear canal** y el canal de texto **🎛️・interfaz** con el panel de botones.
-2. Al entrar a **➕ Crear canal**, el bot crea tu canal (con tus ajustes guardados) y te mueve ahí. En el chat de ese canal publica el mismo panel.
+1. `/voz` → **Configurar / reparar**. Crea (o recupera, sin duplicar) la categoría **・creator**, el canal de voz **・Crear Voice** y el canal de texto **・interface** con el panel (los nombres viejos se renombran solos al actualizar) de botones.
+2. Al entrar a **・Crear Voice**, el bot crea tu canal (con tus ajustes guardados) y te mueve ahí. En el chat de ese canal publica el mismo panel.
 3. Cuando el canal queda sin personas, se borra solo. Si el bot estuvo apagado, al volver borra los que quedaron vacíos.
 
 **Interfaz** (canal de interfaz, chat de tu canal o `/canal`):

@@ -16,10 +16,10 @@ describe('plantillas de servidor: plantilla incluida', () => {
 
   it('es válida, tiene anuncios, invitación, soporte, staff y autorroles', () => {
     const st = templateStats(tpl);
-    assert.ok(st.roles >= 10 && st.channels >= 20 && st.messages >= 5);
+    assert.ok(st.roles >= 10 && st.channels >= 15 && st.messages >= 5);
     const all = tpl.categories.flatMap((c) => c.channels);
     assert.ok(all.some((c) => c.type === 'announcement'));
-    for (const role of ['system', 'rules', 'modUpdates', 'boost', 'selfRoles'] as const) assert.ok(all.some((c) => c.role === role), role);
+    for (const role of ['system', 'rules', 'modUpdates', 'selfRoles'] as const) assert.ok(all.some((c) => c.role === role), role);
     assert.ok(tpl.roles.some((r) => r.selfAssign));
     assert.ok(tpl.roles.some((r) => r.giveToExecutor));
     assert.deepEqual(parseTemplateText(templateToText(tpl)), tpl);
@@ -57,6 +57,19 @@ describe('plantillas de servidor: plantilla incluida', () => {
     assert.deepEqual(tpl.roles.filter((r) => r.premiumTier).map((r) => r.premiumTier).sort(), [1, 2, 3, 4]);
     expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'A', premiumTier: 2 }, { name: 'B', premiumTier: 2 }] }), /premiumTier/);
     expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'A', premiumTier: 7 }] }), /premiumTier/);
+  });
+
+  it('estructura pedida: inf, comm, creator (voz temporal) y Staff', async () => {
+    const { VOICE_NAMES, normalizeName } = await import('../src/services/tempVoice');
+    assert.deepEqual(tpl.categories.map((c) => c.name), ['・inf', '・comm', '・creator', '・Staff']);
+    assert.deepEqual(tpl.categories[0].channels.map((c) => c.name), ['・welcome', '・rules', '・ann', '・news', '・bot-invite', '・rol']);
+    assert.deepEqual(tpl.categories[1].channels.map((c) => c.name), ['・suggestions', '・txt', '・cmd', '・media', '・partners']);
+    // Los canales de ・creator son los de la voz temporal: el bot los reconoce por nombre y los configura.
+    const creator = tpl.categories[2];
+    assert.equal(normalizeName(creator.name), normalizeName(VOICE_NAMES.category.name));
+    assert.equal(normalizeName(creator.channels[0].name), normalizeName(VOICE_NAMES.iface.name));
+    assert.equal(normalizeName(creator.channels[1].name), normalizeName(VOICE_NAMES.hub.name));
+    assert.equal(tpl.bot?.tempVoice, true);
   });
 
   it('autorol separado: Miembro para personas y Bots para bots', () => {

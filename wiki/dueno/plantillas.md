@@ -10,26 +10,24 @@ Solo los **dueños del bot** (el dueño de la aplicación en el portal de Discor
 2. Escribí `/setupdiscord` (o `!setupdiscord`).
 3. Revisá la vista previa y tocá **✅ Crear todo**.
 
-Arma un servidor listo para promocionar el bot, con nombres simples y sin emojis:
+Arma el servidor oficial del bot con esta estructura:
 
 | Categoría | Canales |
 | --- | --- |
-| Información | bienvenida (canal del sistema), reglas, anuncios, novedades, invitar-bot (con botón de invitación), roles (autorroles), boosts |
-| Casino | casino, trabajos, torneos, sorteos |
-| Comunidad | general, comandos, media, sugerencias (foro), partners |
-| Soporte | preguntas-frecuentes, soporte, reportar-bugs (foro) |
-| Voz | Sala general, Gaming, Música, Ayuda por voz |
-| Staff (privada) | staff-chat, avisos-discord, pruebas-bot, Sala staff |
+| ・inf | ・welcome (canal del sistema), ・rules, ・ann y ・news (anuncios que otros servidores pueden seguir), ・bot-invite (con botón para invitar), ・rol (autorroles) |
+| ・comm | ・suggestions (foro), ・txt, ・cmd, ・media, ・partners |
+| ・creator | ・interface y ・Crear Voice: la **voz temporal** (entrar a ・Crear Voice crea tu propia sala) |
+| ・Staff (privada) | ・staff-chat, ・avisos-discord, ・pruebas-bot y la voz ・Staff |
 
-**Roles:** Fundador (te lo da a vos), Staff, Soporte, Partner, VIP, Premium Tier 4, Premium Tier 3, Premium Tier 2, Premium Booster, Bots, Miembro y los de notificaciones que cada uno elige en *roles*: Anuncios, Novedades, Torneos, Sorteos y Beta tester.
+**Roles:** Fundador (te lo da a vos), Staff, Soporte, Partner, VIP, Premium Tier 4, Premium Tier 3, Premium Tier 2, Premium Booster, Beta tester, Anuncios, Novedades, Bots y Miembro.
 
 **Además:**
 * configura los **roles premium**: quien tiene premium recibe el rol de su nivel, y se le cambia o se le quita solo;
-* activa el **autorol**: las personas que entran reciben **Miembro** y los bots que se agregan reciben **Bots** (se separan solos);
-* publica los mensajes de bienvenida, reglas, anuncio de apertura, novedades, invitación y preguntas frecuentes;
-* activa la **Comunidad** de Discord, así *anuncios* y *novedades* quedan como canales que otros servidores pueden **seguir**;
-* sube la verificación a *media*, filtra contenido explícito y pone las notificaciones en *solo menciones*;
-* configura los registros (`/setup`), la voz temporal (`/voz`) y el boost tracker.
+* activa el **autorol**: las personas que entran reciben **Miembro** y los bots reciben **Bots**;
+* publica los mensajes de bienvenida, reglas, anuncio de apertura, novedades e invitación;
+* activa la **Comunidad** de Discord, sube la verificación a *media*, filtra contenido explícito y pone las notificaciones en *solo menciones*.
+
+Los registros no se crean solos con esta plantilla; si los querés, usá `/setup`.
 
 ## Crear sin borrar o borrar y crear
 

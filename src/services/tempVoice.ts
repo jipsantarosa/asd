@@ -293,9 +293,9 @@ export class RenameLimiter {
 // ───────────────────────── Sincronización de /voz (planificador puro, testeable) ─────────────────────────
 
 export const VOICE_NAMES = {
-  category: { name: '🔊 Canales temporales', legacy: ['Canales temporales', 'Voz temporal', 'Temporales'] },
-  hub: { name: '➕ Crear canal', legacy: ['Crear canal', 'Crear sala', 'Unite para crear'] },
-  iface: { name: '🎛️・interfaz', legacy: ['interfaz', 'panel-voz', 'interfaz-voz'] },
+  category: { name: '・creator', legacy: ['🔊 Canales temporales', 'Canales temporales', 'Voz temporal', 'Temporales'] },
+  hub: { name: '・Crear Voice', legacy: ['➕ Crear canal', 'Crear canal', 'Crear sala', 'Unite para crear'] },
+  iface: { name: '・interface', legacy: ['🎛️・interfaz', 'interfaz', 'panel-voz', 'interfaz-voz'] },
 } as const;
 
 /** Nombre comparable: sin emojis, separadores, acentos ni mayúsculas ("➕ Crear canal" → "crear-canal"). */

@@ -5,7 +5,7 @@ import type { GameContext } from './context';
  * (nombres, descripciones, permisos, canales nuevos): al arrancar, cada servidor con una versión anterior
  * se sincroniza solo (sin borrar nada) y queda un resumen en el canal de sistema.
  */
-export const LAYOUT_VERSIONS = { logs: 2, voice: 2 } as const;
+export const LAYOUT_VERSIONS = { logs: 2, voice: 3 } as const;
 export type SetupSystem = keyof typeof LAYOUT_VERSIONS;
 
 export function getSetupVersion(ctx: GameContext, guildId: string, system: SetupSystem): number {
