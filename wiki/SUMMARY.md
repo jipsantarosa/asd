@@ -53,6 +53,7 @@
 
 * [Administrar el casino](dueno/administrar-casino.md)
 * [Torneos especiales](dueno/torneos-especiales.md)
+* [Servidor del bot y plantillas](dueno/plantillas.md)
 
 ## Referencia
 

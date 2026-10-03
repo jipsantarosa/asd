@@ -64,6 +64,7 @@ La configuración y los saldos están en `data/valle.db` y el token en `.env`. P
 - **Motor:** `better-sqlite3` si funciona en tu PC; si no, el SQLite que trae Node (22.13+). El archivo es el mismo con cualquiera de los dos.
 - Las migraciones se aplican **solas al iniciar** y se pueden ejecutar varias veces sin romper nada (tabla `schema_migrations`).
 - **Migración 13:** casamientos, mensajes de boost, anti-webhooks e idioma por servidor.
+- **Migración 14:** plantillas de servidor guardadas (`/plantilla`).
 - **Migración 12:** guarda la versión del diseño de los canales del bot aplicada en cada servidor (para actualizarlos solos).
 - **Migración 11:** trabajos (`!work`) y economía más dura.
 - **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 1.000 monedas viejas, sumando servidores, con tope de 2.500).
@@ -151,6 +152,8 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 | `/boosttracker setup·edit·test·reset·off·status` | Gestionar servidor | Mensaje especial cuando alguien boostea: canal, título, descripción, color (Oro, Rosa, Morado…, o #RRGGBB), imagen y footer. Variables `{user}` `{username}` `{server}` `{boosts}` `{tier}` |
 | `/anti-webhooks setup·off·status·allow·disallow·admins·bots` | Gestionar servidor | Borra webhooks creados por quien no tiene permiso (y expulsa al bot que los creó), y borra mensajes de webhooks con @everyone, invitaciones o spam |
 | `!setlang es` · `!setlang en` | ver: todos · cambiar: Gestionar servidor | Idioma del bot en el servidor |
+| `/setupdiscord` · `!setupdiscord` | dueño del bot | Arma el servidor oficial del bot (anuncios, novedades, invitación, reglas, casino, comunidad, soporte, staff, roles y autorroles). Muestra una vista previa y no borra nada |
+| `/plantilla copiar·pegar·importar·archivo·lista·borrar` | dueño del bot | Copia la estructura de un servidor (roles, categorías, canales y permisos) y la pega en otro; también como archivo `.json` editable |
 | `/top [categoria] [pagina] [servidor]` · `!top 2` · `!top ganancias` | todos | **💰 Richest Players** (por saldo) y categorías secundarias, global o del servidor |
 | `/rank [usuario]` | todos | Puesto en cada ranking |
 | `/stats [juego]` · `/history [juego] [pagina]` | todos | Estadísticas por juego e historial de rondas o movimientos |

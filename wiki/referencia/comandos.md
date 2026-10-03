@@ -42,4 +42,4 @@ En los comandos que apuntan a alguien, **responder a su mensaje** funciona igual
 
 ## Dueño del bot
 
-`!casino …` · `!balance add|remove|set` · `!torneo create|edit|start|stop|cancel` · `!premium dar|quitar`. Ver [Administrar el casino](../dueno/administrar-casino.md).
+`!casino …` · `!balance add|remove|set` · `!torneo create|edit|start|stop|cancel` · `!premium dar|quitar` · `/setupdiscord` · `/plantilla copiar|pegar|importar|archivo|lista|borrar`. Ver [Administrar el casino](../dueno/administrar-casino.md) y [Servidor del bot y plantillas](../dueno/plantillas.md).

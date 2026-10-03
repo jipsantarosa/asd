@@ -1052,6 +1052,21 @@ CREATE TABLE webhook_guard (
 ALTER TABLE guild_settings ADD COLUMN language TEXT NOT NULL DEFAULT 'es';
 `,
   },
+  {
+    id: 14,
+    name: 'plantillas_de_servidor',
+    sql: `
+-- Plantillas de servidor guardadas con /plantilla copiar (solo los dueños del bot las usan).
+CREATE TABLE server_templates (
+  name         TEXT PRIMARY KEY,
+  data         TEXT NOT NULL,
+  created_by   TEXT NOT NULL,
+  source_guild TEXT,
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
+);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

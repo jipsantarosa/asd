@@ -185,7 +185,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       '',
       '**Moderación:** `/mod warn|timeout|untimeout|kick|ban|unban|historial|caso` (o por prefijo).',
       '**Administración:** `/setup` (registros), `/roles` (paneles de roles y distinciones por nivel), `/ajustes` (prefijo y canales del casino), `/voz`, `/automod`, `/boosttracker` (mensaje al boostear), `/anti-webhooks`, `!setlang es|en` (idioma).',
-      '**Dueño del bot:** `!casino config|enable|disable|minbet|maxbet|edge|cooldown|set`, `!balance add|remove|set`, `!torneo create|edit|start|stop|cancel|list|leaderboard`.',
+      '**Dueño del bot:** `!casino config|enable|disable|minbet|maxbet|edge|cooldown|set`, `!balance add|remove|set`, `!torneo create|edit|start|stop|cancel|list|leaderboard`, `/setupdiscord` (arma el servidor oficial del bot), `/plantilla copiar|pegar|importar|archivo|lista|borrar` (copiar y pegar servidores).',
     ].join('\n'),
   };
   const meta = HELP_PAGES.find((h) => h.id === page)!;
