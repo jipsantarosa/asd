@@ -53,6 +53,10 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 | `DEFAULT_PREFIX` | Prefijo inicial de cada servidor (por defecto `!`) |
 | `OWNER_IDS` | (opcional) dueños del bot: configuran el casino, los saldos, los torneos y el premium. El dueño de la aplicación se detecta solo |
 
+### Actualizar sin configurar todo de nuevo
+
+La configuración y los saldos están en `data/valle.db` y el token en `.env`. Para actualizar, hacé doble clic en **`actualizar.bat`** en la misma carpeta: cierra el bot, respalda la base en `data/backups/`, baja la versión nueva de GitHub reemplazando **solo el código** (nunca `data/` ni `.env`), compila y vuelve a arrancar. Se configura con `UPDATE_REPO`, `UPDATE_BRANCH` y, si el repo es privado, `GITHUB_TOKEN` en el `.env`. Si la carpeta es un clon de git, usa `git pull` (fast-forward).
+
 ## 3. Base de datos y migraciones
 
 > 🔄 **Al actualizar el bot no hace falta borrar canales a mano.** Si una versión nueva cambia el diseño de los canales de registros o de voz temporal, al arrancar el bot los actualiza solo en cada servidor donde estaban configurados (renombra, mueve y corrige permisos, sin borrar nada) y deja un resumen en el canal de sistema. Lo que sobre de instalaciones viejas se borra con un botón desde `/setup` o `/voz`. Para que esto funcione con los datos, **no borres la carpeta `data/`** al actualizar.
