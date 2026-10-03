@@ -24,8 +24,15 @@ import { startServerTools } from './discord/commands/serverTools';
 import { startAutoRole } from './discord/commands/autoRole';
 import { startPremiumRoles } from './discord/commands/premiumRoles';
 import path from 'node:path';
+import { acquireInstanceLock } from './instanceLock';
 
 async function main(): Promise<void> {
+  // Una sola copia del bot por carpeta de datos: dos copias responderían dos veces a cada comando.
+  const lock = acquireInstanceLock(path.dirname(path.resolve(env.databasePath)));
+  if (!lock.ok) {
+    logger.error(`Ya hay otra copia del bot corriendo (proceso ${lock.pid}). Cerrá esa ventana o ese proceso; esta copia no se conecta para no duplicar respuestas ni canales.`);
+    process.exit(1);
+  }
   const db = openDatabase(env.databasePath);
   const applied = runMigrations(db);
   if (applied.length) logger.info(`Migraciones aplicadas: ${applied.join(', ')}`);

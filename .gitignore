@@ -5,3 +5,5 @@ data/*.db*
 game.config.json
 activity/dist/
 data/backups/
+data/.bot.lock
+data/.comandos-hash

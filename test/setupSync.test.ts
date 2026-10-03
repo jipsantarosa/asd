@@ -35,6 +35,27 @@ describe('sincronizar registros (/setup)', () => {
     assert.deepEqual(plan.duplicateCategories, ['cat2']);
   });
 
+  it('dos juegos completos (uno con emojis y otro sin): queda uno solo, con los nombres sin emojis', () => {
+    const existing: ExistingChannel[] = [
+      { id: 'catE', name: '📋 Registros', type: 'category', parentId: null },
+      { id: 'catP', name: 'Registros', type: 'category', parentId: null },
+    ];
+    const channels: LogConfig['channels'] = {};
+    const emojiNames: Record<string, string> = { mensajes: '📝・mensajes', sistema: '🤖・sistema-bot' };
+    LOG_CHANNELS.forEach((c, i) => {
+      existing.push({ id: `e${i}`, name: emojiNames[c.key] ?? `✨・${c.name}`, type: 'text', parentId: 'catE' });
+      existing.push({ id: `p${i}`, name: c.name, type: 'text', parentId: 'catP' });
+      channels[c.key] = `e${i}`;
+    });
+    const plan = planSetup({ ...empty, categoryId: 'catE', channels }, existing);
+    // Se queda con los que usa (por ID) y los otros quedan como sobrantes para el botón "Borrar sobrantes".
+    assert.ok(plan.steps.every((st) => st.kind === 'keep'));
+    assert.deepEqual([...plan.duplicates].sort(), LOG_CHANNELS.map((_, i) => `p${i}`).sort());
+    assert.deepEqual(plan.duplicateCategories, ['catP']);
+    // Los que quedan se renombran al nombre oficial, que ya no tiene emojis.
+    for (const c of LOG_CHANNELS) assert.ok(!/\p{Extended_Pictographic}/u.test(c.name), c.name);
+  });
+
   it('con todo guardado no hay sobrantes', () => {
     const existing: ExistingChannel[] = [{ id: 'cat', name: '📋 Registros', type: 'category', parentId: null }];
     const channels: LogConfig['channels'] = {};
