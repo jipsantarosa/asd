@@ -6,6 +6,8 @@ Casino **virtual** para servidores de Discord: 10 juegos con botones y animacion
 
 Además conserva lo útil del bot anterior: **besos** con respuesta y contador, **canales de voz temporales** con interfaz, **moderación completa** (casos, escalado, automod y antiraid), **registros** del servidor, **paneles de roles**, historiales de avatares y nombres, **premium** y `!steal` para copiar emojis y stickers.
 
+> 📖 **Wiki para usuarios y admins** (lista para GitBook): carpeta [`wiki/`](wiki/README.md).
+>
 > 📐 La arquitectura del casino (economía, motor de juegos, azar verificable, datos y decisiones) está en [`docs/CASINO.md`](docs/CASINO.md). La auditoría anterior, en [`docs/AUDITORIA.md`](docs/AUDITORIA.md).
 
 Stack: Node.js 22+, TypeScript, discord.js 14 (≥ 14.19, por Components V2), SQLite (better-sqlite3 o el SQLite de Node).
