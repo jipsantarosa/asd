@@ -55,7 +55,7 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 ### Actualizar sin configurar todo de nuevo
 
-La configuración y los saldos están en `data/valle.db` y el token en `.env`. Para actualizar, hacé doble clic en **`actualizar.bat`** en la misma carpeta: cierra el bot, respalda la base en `data/backups/`, baja la versión nueva de GitHub reemplazando **solo el código** (nunca `data/` ni `.env`), compila y vuelve a arrancar. Se configura con `UPDATE_REPO`, `UPDATE_BRANCH` y, si el repo es privado, `GITHUB_TOKEN` en el `.env`. Si la carpeta es un clon de git, usa `git pull` (fast-forward).
+La configuración y los saldos están en `data/valle.db` y el token en `.env`. Para actualizar, hacé doble clic en **`actualizar.bat`** en la misma carpeta: cierra el bot, respalda la base en `data/backups/`, baja la versión nueva de GitHub reemplazando **solo el código** (nunca `data/`, `.env` ni `node_modules/`) y abre `iniciar.bat`. La lógica está en `scripts/actualizar.mjs` (Node, sin dependencias). Se configura con `UPDATE_REPO` y `UPDATE_BRANCH` en el `.env`. Si el repo es **privado**, hace falta Git instalado (pide iniciar sesión en GitHub una vez) o un `GITHUB_TOKEN` de solo lectura.
 
 ## 3. Base de datos y migraciones
 

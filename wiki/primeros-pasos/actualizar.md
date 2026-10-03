@@ -6,23 +6,33 @@ Toda la configuración (canales de registros, voz temporal, roles, casino, boost
 
 Hacé doble clic en `actualizar.bat`, en la misma carpeta del bot. Hace todo solo:
 
-1. Cierra el bot si está corriendo.
+1. Cierra el bot si está abierto.
 2. Guarda una copia de la base en `data/backups/antes-de-actualizar-<fecha>.db`.
-3. Baja la versión nueva desde GitHub y reemplaza **solo el código** (nunca `data/` ni `.env`).
-4. Instala dependencias y compila.
-5. Vuelve a abrir `iniciar.bat`.
+3. Baja la versión nueva de GitHub y reemplaza **solo el código**. Nunca toca `data/`, `.env` ni `node_modules/`.
+4. Abre `iniciar.bat`, que instala dependencias, compila y arranca.
 
-Si algo falla, no arranca nada raro: tu `data/` y tu `.env` quedan intactos y podés abrir `iniciar.bat` con la versión que tenías.
+Si algo falla, te dice qué pasó y no arranca nada raro: tu `data/` y tu `.env` quedan intactos.
 
-De dónde baja el código se configura en el `.env`:
+### Repositorio privado
 
-| Variable | Para qué |
+GitHub no deja bajar un repositorio privado sin identificarse. Elegí una:
+
+* **Instalar Git** ([git-scm.com](https://git-scm.com)). La primera vez que actualices se abre el navegador para iniciar sesión en GitHub; después queda recordado.
+* **Un token de solo lectura** en el `.env`: `GITHUB_TOKEN=...` (GitHub → Settings → Developer settings → Fine-grained tokens → acceso al repositorio con *Contents: Read-only*). Nunca lo compartas.
+
+### De dónde baja el código
+
+| Variable del `.env` | Para qué |
 | --- | --- |
 | `UPDATE_REPO` | Repositorio de GitHub (por defecto `jipsantarosa/asd`) |
 | `UPDATE_BRANCH` | Rama a bajar. Cuando la versión se fusione a `main`, cambiala a `main` |
-| `GITHUB_TOKEN` | Solo si el repositorio es privado: token de GitHub de solo lectura. Nunca lo compartas |
+| `GITHUB_TOKEN` | Opcional: token de solo lectura para repositorios privados |
 
-Si la carpeta es un clon de git, `actualizar.bat` usa `git fetch` + `git merge --ff-only` en lugar de bajar el zip.
+Si la carpeta del bot es un clon de git, usa `git pull` (solo avance rápido).
+
+{% hint style="warning" %}
+**Si tenés una versión vieja de `actualizar.bat`** (la primera tenía un error y no andaba): esta única vez bajá el código a mano y copialo encima de la carpeta del bot **sin borrar `data/` ni `.env`**. Desde ahí `actualizar.bat` se actualiza solo.
+{% endhint %}
 
 ## Opción manual
 
