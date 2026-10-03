@@ -6,6 +6,7 @@ import {
 } from '../../services/premium';
 import { hideViewsOf } from '../../services/historyViews';
 import { row } from '../app';
+import { syncUserPremiumEverywhere } from './premiumRoles';
 import { isOwner } from '../owner';
 import { fetchAndRecord, serverTag } from '../tracking/userMedia';
 import { cid } from '../ui/ids';
@@ -53,6 +54,7 @@ export const premiumCmd: Command = {
       if (!user || !tier) throw new GameError(`Uso: \`${c.prefix}premium dar @usuario <1-4> [días]\``);
       if (user.bot) throw new GameError('Los bots no pueden tener premium.');
       const p = grantPremium(ctx, user.id, Number(tier), c.member.id, daysRaw ?? null);
+      void syncUserPremiumEverywhere(c.app, user.id);
       await c.reply({ embeds: [new EmbedBuilder().setColor(ACCENT).setDescription(
         `✅ ${user} ahora tiene ${tierLine(p.tier)}${p.expires_at ? ` hasta <t:${Math.floor(p.expires_at / 1000)}:f>` : ' (sin vencimiento)'}.`)] }, { ephemeral: true });
       return;
@@ -71,6 +73,7 @@ export const premiumCmd: Command = {
       const user = await c.user_('usuario', 1);
       if (!user) throw new GameError(`Uso: \`${c.prefix}premium quitar @usuario\``);
       const ok = revokePremium(ctx, user.id);
+      void syncUserPremiumEverywhere(c.app, user.id);
       await c.reply({ content: ok ? `🗑️ Le quité el premium a ${user}.` : `${user} no tenía premium.` }, { ephemeral: true });
       return;
     }

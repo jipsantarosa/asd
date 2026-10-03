@@ -53,6 +53,12 @@ describe('plantillas de servidor: plantilla incluida', () => {
     assert.equal(new Set(keys).size, keys.length);
   });
 
+  it('un rol por nivel premium', () => {
+    assert.deepEqual(tpl.roles.filter((r) => r.premiumTier).map((r) => r.premiumTier).sort(), [1, 2, 3, 4]);
+    expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'A', premiumTier: 2 }, { name: 'B', premiumTier: 2 }] }), /premiumTier/);
+    expectGameError(() => parseTemplate({ ...base, roles: [{ name: 'A', premiumTier: 7 }] }), /premiumTier/);
+  });
+
   it('autorol separado: Miembro para personas y Bots para bots', () => {
     assert.equal(tpl.roles.find((r) => r.autoRole === 'members')?.name, 'Miembro');
     assert.equal(tpl.roles.find((r) => r.autoRole === 'bots')?.name, 'Bots');

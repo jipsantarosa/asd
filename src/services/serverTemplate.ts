@@ -32,6 +32,8 @@ export interface TplRole {
   giveToExecutor?: boolean;
   /** Rol automático (/autorol): "members" lo reciben las personas que entran y "bots" los bots. Uno de cada uno. */
   autoRole?: 'members' | 'bots';
+  /** Rol de un nivel premium (1 a 4): el bot se lo da a quien tiene ese nivel (/rolespremium). */
+  premiumTier?: 1 | 2 | 3 | 4;
 }
 
 export interface TplButton {
@@ -292,9 +294,11 @@ export function parseTemplate(raw: unknown): ServerTemplate {
       giveToExecutor: bool(cc, r.giveToExecutor, 'giveToExecutor'),
       autoRole: r.autoRole === undefined || r.autoRole === null ? undefined
         : r.autoRole === 'members' || r.autoRole === 'bots' ? r.autoRole : cc.fail('"autoRole" tiene que ser "members" o "bots".'),
+      premiumTier: int(cc, r.premiumTier, 'premiumTier', 1, 4) as TplRole['premiumTier'],
     });
   });
   for (const k of ['members', 'bots'] as const) if (roles.filter((r) => r.autoRole === k).length > 1) c.fail(`solo un rol puede tener "autoRole": "${k}".`);
+  for (const t of [1, 2, 3, 4]) if (roles.filter((r) => r.premiumTier === t).length > 1) c.fail(`solo un rol puede tener "premiumTier": ${t}.`);
   const seenRoles = new Set<string>();
   for (const r of roles) {
     const k = nameKey(r.name);
@@ -388,6 +392,8 @@ export interface GuildSnapshot {
   systemChannelId?: string | null;
   /** Roles automáticos configurados con /autorol (se copian como "autoRole"). */
   autoRoles?: { members: string | null; bots: string | null };
+  /** Roles premium configurados con /rolespremium (nivel → rol). */
+  premiumRoles?: Partial<Record<1 | 2 | 3 | 4, string>>;
   rulesChannelId?: string | null;
   modUpdatesChannelId?: string | null;
   verification?: number;
@@ -425,6 +431,7 @@ export function snapshotToTemplate(s: GuildSnapshot, name: string): ServerTempla
       mentionable: r.mentionable || undefined,
       permissions: r.permissions ? permNames(r.permissions) : undefined,
       autoRole: r.id === s.autoRoles?.members ? 'members' : r.id === s.autoRoles?.bots ? 'bots' : undefined,
+      premiumTier: ([1, 2, 3, 4] as const).find((t) => s.premiumRoles?.[t] === r.id),
     }));
   }
   const ows = (list: GuildSnapshot['channels'][number]['overwrites']): TplOverwrite[] | undefined => {
@@ -613,6 +620,10 @@ export function botServerTemplate(): ServerTemplate {
       { name: 'Soporte', color: C.blue, hoist: true, mentionable: true, permissions: ['ManageMessages', 'ManageThreads', 'ModerateMembers'] },
       { name: 'Partner', color: C.teal, hoist: true },
       { name: 'VIP', color: C.pink, hoist: true },
+      { name: 'Premium Tier 4', color: C.purple, hoist: true, premiumTier: 4 },
+      { name: 'Premium Tier 3', color: C.orange, hoist: true, premiumTier: 3 },
+      { name: 'Premium Tier 2', color: C.gold, hoist: true, premiumTier: 2 },
+      { name: 'Premium Booster', color: 0x5dade2, hoist: true, premiumTier: 1 },
       { name: 'Beta tester', color: C.purple, selfAssign: true },
       { name: 'Anuncios', color: C.orange, mentionable: true, selfAssign: true },
       { name: 'Novedades', color: C.green, mentionable: true, selfAssign: true },

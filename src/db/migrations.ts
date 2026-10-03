@@ -1080,6 +1080,20 @@ CREATE TABLE auto_roles (
 );
 `,
   },
+  {
+    id: 16,
+    name: 'roles_premium',
+    sql: `
+-- Rol de cada nivel premium en cada servidor (/rolespremium). El bot los da y los quita solo.
+CREATE TABLE premium_roles (
+  guild_id   TEXT NOT NULL,
+  tier       INTEGER NOT NULL CHECK (tier BETWEEN 1 AND 4),
+  role_id    TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, tier)
+);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

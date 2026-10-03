@@ -131,3 +131,32 @@ describe('autorol', () => {
     expectGameError(() => setAutoRole(w.ctx, G, 'members', 'nope'), /inválido/);
   });
 });
+
+describe('roles premium', () => {
+  const R = ['300000000000000011', '300000000000000012', '300000000000000013', '300000000000000014'];
+  it('cada persona tiene solo el rol de su nivel; sin premium, ninguno', async () => {
+    const { premiumRoleChanges } = await import('../src/services/premiumRoles');
+    const roles = { 1: R[0], 2: R[1], 3: R[2], 4: R[3] };
+    assert.deepEqual(premiumRoleChanges(roles, 3, () => false), { add: [R[2]], remove: [] });
+    // Subió de nivel: se cambia el rol.
+    assert.deepEqual(premiumRoleChanges(roles, 4, (id) => id === R[1]), { add: [R[3]], remove: [R[1]] });
+    // Se le venció: se quitan todos.
+    assert.deepEqual(premiumRoleChanges(roles, 0, (id) => id === R[0] || id === R[3]), { add: [], remove: [R[0], R[3]] });
+    // Nivel sin rol configurado: no se agrega nada.
+    assert.deepEqual(premiumRoleChanges({ 1: R[0] }, 2, () => false), { add: [], remove: [] });
+  });
+
+  it('configurar: un rol distinto por nivel, nivel 1 a 4, y se puede desactivar', async () => {
+    const { getPremiumRoles, setPremiumRole, clearPremiumRoles } = await import('../src/services/premiumRoles');
+    const w = makeWorld();
+    setPremiumRole(w.ctx, G, 1, R[0]);
+    setPremiumRole(w.ctx, G, 4, R[3]);
+    assert.deepEqual(getPremiumRoles(w.ctx, G), { 1: R[0], 4: R[3] });
+    expectGameError(() => setPremiumRole(w.ctx, G, 2, R[0]), /nivel 1/);
+    expectGameError(() => setPremiumRole(w.ctx, G, 5, R[1]), /1, 2, 3 o 4/);
+    setPremiumRole(w.ctx, G, 1, null);
+    assert.deepEqual(getPremiumRoles(w.ctx, G), { 4: R[3] });
+    clearPremiumRoles(w.ctx, G);
+    assert.deepEqual(getPremiumRoles(w.ctx, G), {});
+  });
+});

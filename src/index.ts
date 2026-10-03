@@ -22,6 +22,7 @@ import { forgetChannel } from './casino/guilds';
 import { autoSyncLayouts } from './discord/setupMaintenance';
 import { startServerTools } from './discord/commands/serverTools';
 import { startAutoRole } from './discord/commands/autoRole';
+import { startPremiumRoles } from './discord/commands/premiumRoles';
 import path from 'node:path';
 
 async function main(): Promise<void> {
@@ -77,6 +78,8 @@ async function main(): Promise<void> {
   startServerTools(app);
   // Rol automático para quienes entran (/autorol).
   startAutoRole(app);
+  // Roles premium (/rolespremium): se dan y se quitan solos según el nivel de cada persona.
+  const premiumRoles = startPremiumRoles(app);
   client.on(Events.Error, (e) => logger.error('Error del cliente:', e));
 
   // Un canal borrado deja de figurar en los ajustes del casino.
@@ -113,6 +116,7 @@ async function main(): Promise<void> {
     casino.stop();
     clearInterval(tempVoice);
     clearInterval(backups);
+    clearInterval(premiumRoles);
     await client.destroy().catch(() => undefined);
     db.close();
     process.exit(0);

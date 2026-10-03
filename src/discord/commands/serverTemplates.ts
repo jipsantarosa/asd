@@ -23,6 +23,8 @@ import { cid } from '../ui/ids';
 import { publicGroupMessage } from '../ui/rolesPanel';
 import { roleProblem } from '../roleSafety';
 import { applyAutoRolesToAll } from './autoRole';
+import { syncGuildPremium } from './premiumRoles';
+import { getPremiumRoles, setPremiumRole } from '../../services/premiumRoles';
 import { COLORS, clean } from '../ui/theme';
 import { setupTempVoice } from '../voice/tempVoice';
 import type { Command, CommandContext } from './types';
@@ -57,7 +59,7 @@ export function botInvite(app: App): string {
 
 // ───────────────────────── foto del servidor ─────────────────────────
 
-export async function snapshotGuild(guild: Guild, autoRoles: AutoRoles | null = null): Promise<GuildSnapshot> {
+export async function snapshotGuild(guild: Guild, autoRoles: AutoRoles | null = null, premiumRoles: GuildSnapshot['premiumRoles'] = undefined): Promise<GuildSnapshot> {
   await guild.roles.fetch();
   await guild.channels.fetch();
   return {
@@ -88,6 +90,7 @@ export async function snapshotGuild(guild: Guild, autoRoles: AutoRoles | null = 
     notifications: guild.defaultMessageNotifications,
     community: guild.features.includes('COMMUNITY'),
     autoRoles: autoRoles ?? undefined,
+    premiumRoles,
   };
 }
 
@@ -124,6 +127,7 @@ export async function previewPanel(app: App, guild: Guild, owner: string, name: 
   if (tpl.settings?.community && !guild.features.includes('COMMUNITY')) extras.push('🌐 Activa la **Comunidad** (canales de anuncios que otros servidores pueden seguir)');
   if (tpl.settings?.verification || tpl.settings?.contentFilter) extras.push('🛡️ Ajusta la verificación y el filtro de contenido');
   if (tpl.roles.some((r) => r.selfAssign)) extras.push('🎭 Publica un panel de autorroles');
+  if (tpl.roles.some((r) => r.premiumTier)) extras.push('💎 Configura los roles premium (se dan y se quitan solos según el nivel)');
   if (tpl.bot?.logs) extras.push('📜 Configura los registros (`/setup`)');
   if (tpl.bot?.tempVoice) extras.push('🔊 Configura la voz temporal (`/voz`)');
   if (tpl.categories.some((c) => c.channels.some((ch) => ch.role === 'boost'))) extras.push('🚀 Activa el boost tracker');
@@ -227,7 +231,7 @@ export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate,
     const d = new Date(app.ctx.now());
     const p2 = (n: number) => String(n).padStart(2, '0');
     const backupName = `respaldo-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
-    const backup = snapshotToTemplate(await snapshotGuild(guild, getAutoRoles(app.ctx, guild.id)), backupName);
+    const backup = snapshotToTemplate(await snapshotGuild(guild, getAutoRoles(app.ctx, guild.id), getPremiumRoles(app.ctx, guild.id)), backupName);
     saveTemplate(app.ctx, backupName, backup, { by: executor.id, sourceGuild: guild.id, replace: true });
     report.notes.push(`Guardé la estructura vieja como plantilla **${backupName}** (\`/plantilla pegar nombre:${backupName}\` la vuelve a crear).`);
     leftovers = await deleteChannels([...guild.channels.cache.values()].filter((c) => !c.isThread()), `${reason} - borrar canales`, report);
@@ -279,6 +283,30 @@ export async function applyTemplate(app: App, guild: Guild, tpl: ServerTemplate,
       autoChanged = true;
       report.notes.push(`Autorol de ${label}: <@&${role.id}>.`);
     } else report.notes.push(`Ya había un autorol de ${label} (<@&${current}>); no lo cambié.`);
+  }
+  // ── Roles premium (uno por nivel) ──
+  const premiumTpl = tpl.roles.filter((r) => r.premiumTier);
+  if (premiumTpl.length) {
+    let set = 0;
+    for (const t of premiumTpl) {
+      const role = roles.get(nameKey(t.name));
+      if (!role) continue;
+      const problem = roleProblem(guild, role);
+      if (problem) {
+        report.warnings.push(`No pude usar **${clean(role.name)}** como rol premium: ${problem}.`);
+        continue;
+      }
+      try {
+        setPremiumRole(app.ctx, guild.id, t.premiumTier!, role.id);
+        set++;
+      } catch (err) {
+        report.warnings.push(`Rol premium **${clean(role.name)}**: ${(err as Error).message}`);
+      }
+    }
+    if (set) {
+      const changed = await syncGuildPremium(app, guild).catch(() => 0);
+      report.notes.push(`Roles premium configurados (${set} niveles): se dan y se quitan solos${changed ? `; actualicé a ${changed} miembros` : ''}.`);
+    }
   }
   if (autoChanged) {
     const r = await applyAutoRolesToAll(app, guild, 500).catch(() => null);
@@ -670,7 +698,7 @@ export const plantillaCmd: Command = {
     switch (action) {
       case 'copiar': {
         await c.defer(true);
-        const tpl = snapshotToTemplate(await snapshotGuild(c.guild, getAutoRoles(c.app.ctx, c.guild.id)), name());
+        const tpl = snapshotToTemplate(await snapshotGuild(c.guild, getAutoRoles(c.app.ctx, c.guild.id), getPremiumRoles(c.app.ctx, c.guild.id)), name());
         const saved = saveTemplate(c.app.ctx, name(), tpl, { by: c.member.id, sourceGuild: c.guild.id, replace });
         const st = templateStats(tpl);
         await c.reply({

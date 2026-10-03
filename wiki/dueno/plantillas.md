@@ -21,9 +21,10 @@ Arma un servidor listo para promocionar el bot, con nombres simples y sin emojis
 | Voz | Sala general, Gaming, Música, Ayuda por voz |
 | Staff (privada) | staff-chat, avisos-discord, pruebas-bot, Sala staff |
 
-**Roles:** Fundador (te lo da a vos), Staff, Soporte, Partner, VIP, Bots, Miembro y los de notificaciones que cada uno elige en *roles*: Anuncios, Novedades, Torneos, Sorteos y Beta tester.
+**Roles:** Fundador (te lo da a vos), Staff, Soporte, Partner, VIP, Premium Tier 4, Premium Tier 3, Premium Tier 2, Premium Booster, Bots, Miembro y los de notificaciones que cada uno elige en *roles*: Anuncios, Novedades, Torneos, Sorteos y Beta tester.
 
 **Además:**
+* configura los **roles premium**: quien tiene premium recibe el rol de su nivel, y se le cambia o se le quita solo;
 * activa el **autorol**: las personas que entran reciben **Miembro** y los bots que se agregan reciben **Bots** (se separan solos);
 * publica los mensajes de bienvenida, reglas, anuncio de apertura, novedades, invitación y preguntas frecuentes;
 * activa la **Comunidad** de Discord, así *anuncios* y *novedades* quedan como canales que otros servidores pueden **seguir**;
@@ -86,6 +87,7 @@ No se copian mensajes, miembros ni permisos de personas puntuales; tampoco los r
 }
 ```
 
+* `premiumTier` de un rol: `1` a `4`, el rol de ese nivel premium.
 * `autoRole` de un rol: `members` (lo reciben las personas que entran) o `bots` (lo reciben los bots).
 * `type`: `text`, `voice`, `announcement`, `forum` o `stage`.
 * `role` de un canal: `system` (bienvenidas), `rules`, `modUpdates` (avisos de Discord para moderadores), `boost` (boost tracker) o `selfRoles` (panel de autorroles).

@@ -184,7 +184,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       `**Comunidad:** \`${p}profile\` · \`${p}marry\` · \`${p}divorce\` · \`${p}kiss\` · \`${p}besos\` · \`${p}avs\` · \`${p}banners\` · \`${p}names\` · \`${p}steal\` · \`${p}premium\``,
       '',
       '**Moderación:** `/mod warn|timeout|untimeout|kick|ban|unban|historial|caso` (o por prefijo).',
-      '**Administración:** `/setup` (registros), `/roles` (paneles de roles y distinciones por nivel), `/ajustes` (prefijo y canales del casino), `/voz`, `/automod`, `/boosttracker` (mensaje al boostear), `/anti-webhooks`, `/autorol` (rol automático para personas y otro para bots), `!setlang es|en` (idioma).',
+      '**Administración:** `/setup` (registros), `/roles` (paneles de roles y distinciones por nivel), `/ajustes` (prefijo y canales del casino), `/voz`, `/automod`, `/boosttracker` (mensaje al boostear), `/anti-webhooks`, `/autorol` (rol automático para personas y otro para bots), `/rolespremium` (un rol por nivel premium), `!setlang es|en` (idioma).',
       '**Dueño del bot:** `!casino config|enable|disable|minbet|maxbet|edge|cooldown|set`, `!balance add|remove|set`, `!torneo create|edit|start|stop|cancel|list|leaderboard`, `/setupdiscord` (arma el servidor oficial del bot), `/plantilla copiar|pegar|importar|archivo|lista|borrar` (copiar y pegar servidores).',
     ].join('\n'),
   };
