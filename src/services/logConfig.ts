@@ -5,22 +5,22 @@ import type { GameContext } from './context';
  * `legacy`: nombres que tuvo el canal en versiones anteriores, para reconocerlo y renombrarlo al sincronizar.
  */
 export const LOG_CHANNELS: readonly { key: LogKey; name: string; topic: string; legacy?: readonly string[] }[] = [
-  { key: 'mensajes', name: '📝・mensajes', topic: 'Mensajes enviados y editados.' },
-  { key: 'eliminados', name: '🗑️・eliminados', topic: 'Mensajes eliminados (individuales y en masa).' },
-  { key: 'adjuntos', name: '🖼️・adjuntos', topic: 'Imágenes y archivos enviados (copia de respaldo).' },
-  { key: 'baneos', name: '🔨・baneos', topic: 'Baneos y desbaneos.' },
-  { key: 'expulsiones', name: '👢・expulsiones', topic: 'Expulsiones de miembros.' },
-  { key: 'entradas', name: '🚪・entradas-salidas', topic: 'Miembros que entran y salen.', legacy: ['entradas', 'entradas-y-salidas', 'miembros'] },
-  { key: 'apodos', name: '🏷️・apodos', topic: 'Cambios de apodo.' },
-  { key: 'roles', name: '🎭・roles', topic: 'Roles asignados/quitados y cambios en roles del servidor.' },
-  { key: 'moderacion', name: '🛡️・moderacion', topic: 'Aislamientos, purgas y otras acciones de moderación.' },
-  { key: 'voz', name: '🔊・voz', topic: 'Entradas, salidas y movimientos en canales de voz.' },
-  { key: 'servidor', name: '⚙️・servidor', topic: 'Canales, invitaciones y ajustes del servidor.' },
-  { key: 'sistema', name: '🤖・sistema-bot', topic: 'Configuración del bot y alertas antiabuso.', legacy: ['sistema', 'bot', 'logs-bot'] },
+  { key: 'mensajes', name: 'mensajes', topic: 'Mensajes enviados y editados.' },
+  { key: 'eliminados', name: 'eliminados', topic: 'Mensajes eliminados (individuales y en masa).' },
+  { key: 'adjuntos', name: 'adjuntos', topic: 'Imágenes y archivos enviados (copia de respaldo).' },
+  { key: 'baneos', name: 'baneos', topic: 'Baneos y desbaneos.' },
+  { key: 'expulsiones', name: 'expulsiones', topic: 'Expulsiones de miembros.' },
+  { key: 'entradas', name: 'entradas-salidas', topic: 'Miembros que entran y salen.', legacy: ['entradas', 'entradas-y-salidas', 'miembros'] },
+  { key: 'apodos', name: 'apodos', topic: 'Cambios de apodo.' },
+  { key: 'roles', name: 'roles', topic: 'Roles asignados/quitados y cambios en roles del servidor.' },
+  { key: 'moderacion', name: 'moderacion', topic: 'Aislamientos, purgas y otras acciones de moderación.' },
+  { key: 'voz', name: 'voz', topic: 'Entradas, salidas y movimientos en canales de voz.' },
+  { key: 'servidor', name: 'servidor', topic: 'Canales, invitaciones y ajustes del servidor.' },
+  { key: 'sistema', name: 'sistema-bot', topic: 'Configuración del bot y alertas antiabuso.', legacy: ['sistema', 'bot', 'logs-bot'] },
 ];
 
 export type LogKey = 'mensajes' | 'eliminados' | 'adjuntos' | 'baneos' | 'expulsiones' | 'entradas' | 'apodos' | 'roles' | 'moderacion' | 'voz' | 'servidor' | 'sistema';
-export const CATEGORY_NAME = '📋 Registros';
+export const CATEGORY_NAME = 'Registros';
 
 export interface LogConfig {
   categoryId: string | null;
@@ -114,7 +114,7 @@ export interface SetupPlan {
 }
 
 /** Nombres que tuvo la categoría en versiones anteriores (se reconocen sin importar emojis ni mayúsculas). */
-export const CATEGORY_LEGACY = ['Registros', 'Logs', 'Registro'];
+export const CATEGORY_LEGACY = ['📋 Registros', 'Logs', 'Registro'];
 
 /** Nombre comparable: sin emojis ni separadores, en minúsculas y sin acentos ("📝・Mensajes" → "mensajes"). */
 export function normalizeChannelName(name: string): string {

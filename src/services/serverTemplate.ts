@@ -693,11 +693,11 @@ export function botServerTemplate(): ServerTemplate {
         ],
       },
       {
-        // Voz temporal: el bot reconoce estos canales y los configura (panel en ・interface; entrar a ・Crear Voice crea una sala).
-        name: '・creator',
+        // Voz temporal: el bot reconoce estos canales y los configura (panel en interfaz; entrar a Crear voice crea una sala).
+        name: 'creator',
         channels: [
-          { name: '・interface', type: 'text' },
-          { name: '・Crear Voice', type: 'voice' },
+          { name: 'interfaz', type: 'text' },
+          { name: 'Crear voice', type: 'voice' },
         ],
       },
       {

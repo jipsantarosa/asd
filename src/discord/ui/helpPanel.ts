@@ -67,7 +67,7 @@ function englishHelp(p: string): Record<HelpPage, string> {
       '• Replying to someone with a command (like `!kiss`) works the same as mentioning them.',
     ].join('\n'),
     voz: [
-      '🔊 **Temporary voice channels:** join **・Crear Voice** and the bot creates your own channel and moves you there. It\'s deleted when empty.',
+      '🔊 **Temporary voice channels:** join **Crear voice** and the bot creates your own channel and moves you there. It\'s deleted when empty.',
       '• Manage it from the **interface** channel, your channel chat or `/canal`.',
       '**Admins:** `/voz` creates, repairs or updates everything without duplicating.',
     ].join('\n'),
@@ -160,7 +160,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       `• 💎 **Premium** (\`${p}premium\`): \`${p}tags\`, \`${p}clearavatars\`, \`${p}clearnames\`, \`${p}cleartags\`, \`${p}mstats\`, \`${p}ghostmode\` y \`${p}botperfil\`. No da ventajas en el casino.`,
     ].join('\n'),
     voz: [
-      '🔊 **Canales de voz temporales:** entrá al canal **・Crear Voice** y el bot te arma tu propio canal y te mueve ahí. Cuando queda vacío, se borra solo.',
+      '🔊 **Canales de voz temporales:** entrá al canal **Crear voice** y el bot te arma tu propio canal y te mueve ahí. Cuando queda vacío, se borra solo.',
       '',
       '• Manejalo desde el canal de **interfaz**, desde el chat de tu canal o con `/canal`:',
       '  ✏️ nombre · 👥 límite · 🔒 privado · 👻 oculto · 🌍 región · ✅ permitir · ➖ quitar acceso · 📨 invitar · 👢 expulsar · 🚫 bloquear · ♻️ desbloquear · 👑 reclamar · 🔁 transferir · 🗑️ eliminar · ℹ️ info.',

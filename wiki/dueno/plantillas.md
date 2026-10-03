@@ -16,7 +16,7 @@ Arma el servidor oficial del bot con esta estructura:
 | --- | --- |
 | ・inf | ・welcome (canal del sistema), ・rules, ・ann y ・news (anuncios que otros servidores pueden seguir), ・bot-invite (con botón para invitar), ・rol (autorroles) |
 | ・comm | ・suggestions (foro), ・txt, ・cmd, ・media, ・partners |
-| ・creator | ・interface y ・Crear Voice: la **voz temporal** (entrar a ・Crear Voice crea tu propia sala) |
+| creator | interfaz y Crear voice: la **voz temporal** (entrar a Crear voice crea tu propia sala) |
 | ・Staff (privada) | ・staff-chat, ・avisos-discord, ・pruebas-bot y la voz ・Staff |
 
 **Roles:** Fundador (te lo da a vos), Staff, Soporte, Partner, VIP, Premium Tier 4, Premium Tier 3, Premium Tier 2, Premium Booster, Beta tester, Anuncios, Novedades, Bots y Miembro.

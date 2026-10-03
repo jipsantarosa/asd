@@ -1,7 +1,7 @@
 # Canales de voz temporales
 
-1. Un admin usa **`/voz`** → **Configurar / reparar**: crea la categoría **・creator**, el canal **・Crear Voice** y **・interface**.
-2. Al entrar a **・Crear Voice**, el bot crea **tu canal** y te mueve ahí.
+1. Un admin usa **`/voz`** → **Configurar / reparar**: crea la categoría **creator**, el canal **Crear voice** y **interfaz**.
+2. Al entrar a **Crear voice**, el bot crea **tu canal** y te mueve ahí.
 3. Cuando queda vacío, se borra solo.
 
 ## Panel

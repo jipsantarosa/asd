@@ -61,10 +61,10 @@ describe('plantillas de servidor: plantilla incluida', () => {
 
   it('estructura pedida: inf, comm, creator (voz temporal) y Staff', async () => {
     const { VOICE_NAMES, normalizeName } = await import('../src/services/tempVoice');
-    assert.deepEqual(tpl.categories.map((c) => c.name), ['・inf', '・comm', '・creator', '・Staff']);
+    assert.deepEqual(tpl.categories.map((c) => c.name), ['・inf', '・comm', 'creator', '・Staff']);
     assert.deepEqual(tpl.categories[0].channels.map((c) => c.name), ['・welcome', '・rules', '・ann', '・news', '・bot-invite', '・rol']);
     assert.deepEqual(tpl.categories[1].channels.map((c) => c.name), ['・suggestions', '・txt', '・cmd', '・media', '・partners']);
-    // Los canales de ・creator son los de la voz temporal: el bot los reconoce por nombre y los configura.
+    // Los canales de creator son los de la voz temporal: el bot los reconoce por nombre y los configura.
     const creator = tpl.categories[2];
     assert.equal(normalizeName(creator.name), normalizeName(VOICE_NAMES.category.name));
     assert.equal(normalizeName(creator.channels[0].name), normalizeName(VOICE_NAMES.iface.name));
