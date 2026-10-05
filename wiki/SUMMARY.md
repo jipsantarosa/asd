@@ -31,6 +31,7 @@
 ## Comunidad
 
 * [Perfil y casamientos](comunidad/perfil-y-casamientos.md)
+* [!gif y estadísticas de juegos](comunidad/gif-y-estadisticas.md)
 * [Besos](comunidad/besos.md)
 * [Historiales y !steal](comunidad/historiales-y-steal.md)
 * [Premium](comunidad/premium.md)

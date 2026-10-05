@@ -16,6 +16,7 @@ import { antiWebhooksCmd, boostTrackerCmd } from './serverTools';
 import { plantillaCmd, setupDiscordCmd } from './serverTemplates';
 import { autoRoleCmd } from './autoRole';
 import { premiumRolesCmd } from './premiumRoles';
+import { EXTRA_COMMANDS } from './extras';
 import type { Command } from './types';
 import { canalCmd, vozCmd } from './voice';
 import { MODERATION_COMMANDS } from './moderation';
@@ -108,7 +109,7 @@ const setup: Command = {
 
 export const COMMANDS: Command[] = [
   ...CASINO_COMMANDS,
-  profileCmd, marryCmd, divorceCmd, setlangCmd, boostTrackerCmd, antiWebhooksCmd, setupDiscordCmd, plantillaCmd, autoRoleCmd, premiumRolesCmd,
+  profileCmd, marryCmd, divorceCmd, setlangCmd, boostTrackerCmd, antiWebhooksCmd, setupDiscordCmd, plantillaCmd, autoRoleCmd, premiumRolesCmd, ...EXTRA_COMMANDS,
   ayuda, prefijo, ajustes, roles, setup, stealCmd, purgar, avatares, banners, kissCmd, besosCmd,
   premiumCmd, namesCmd, tagsCmd, clearAvatarsCmd, clearNamesCmd, clearTagsCmd, mstatsCmd, ghostCmd, botProfileCmd,
   vozCmd, canalCmd, ...MODERATION_COMMANDS,

@@ -162,6 +162,9 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 | `!setlang es` · `!setlang en` | ver: todos · cambiar: Gestionar servidor | Idioma del bot en el servidor |
 | `/setupdiscord` · `!setupdiscord` | dueño del bot | Arma el servidor oficial del bot (anuncios, novedades, invitación, reglas, casino, comunidad, soporte, staff, roles y autorroles). Muestra una vista previa; sin emojis, con autorol Miembro/Bots |
 | `/plantilla copiar·pegar·importar·archivo·lista·borrar` | dueño del bot | Copia la estructura de un servidor (roles, categorías, canales y permisos) y la pega en otro; también como archivo `.json` editable. Al pegar se elige: crear sin borrar nada, o borrar todos los canales y crear (con doble confirmación y respaldo automático `respaldo-…`) |
+| `/gif` · `!gif` (con fotos adjuntas, respondiendo a una foto o `!gif @usuario`) | todos | Convierte fotos PNG o JPG en GIF; con varias (hasta 10) arma una animación |
+| `/uservalo` · `!uservalo Nombre#TAG` | todos | Valorant: nivel, rango, mejor rango y últimas 5 partidas (K/D, HS %). Necesita `HENRIK_API_KEY` en el `.env` |
+| `/cs2` · `!cs2 <perfil de Steam>` | todos | CS2: K/D, headshots, precisión, horas, partidas ganadas y MVPs. Necesita `STEAM_API_KEY` en el `.env` y el perfil público |
 | `/rolespremium crear·set·sync·off·estado` · `!rolespremium crear` | Gestionar roles | Un rol por nivel premium (Booster, Tier 2, Tier 3, Tier 4): el bot se lo da a quien tiene premium, se lo cambia si cambia de nivel y se lo quita si lo pierde o vence |
 | `/autorol miembros·bots·aplicar·off·estado` · `!autorol @rol` · `!autorol bots @rol` | Gestionar roles | Roles automáticos al entrar, separados: uno para personas y otro para bots |
 | `/top [categoria] [pagina] [servidor]` · `!top 2` · `!top ganancias` | todos | **💰 Richest Players** (por saldo) y categorías secundarias, global o del servidor |

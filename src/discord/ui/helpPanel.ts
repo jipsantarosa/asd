@@ -64,6 +64,7 @@ function englishHelp(p: string): Record<HelpPage, string> {
       `• \`${p}kiss @user\` — an anime GIF kiss and your kiss counter. \`${p}besos\` shows your stats.`,
       `• \`${p}avs\` / \`${p}banners\` / \`${p}names\` — avatar, banner and name history.`,
       `• \`${p}steal\` replying to a message — copies its emojis or sticker to this server.`,
+      `• \`${p}gif\` — turns photos (PNG/JPG) into a GIF. \`${p}uservalo Name#TAG\` and \`${p}cs2 <Steam profile>\` — game stats.`,
       '• Replying to someone with a command (like `!kiss`) works the same as mentioning them.',
     ].join('\n'),
     voz: [
@@ -157,6 +158,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
       `• \`${p}avs @usuario\` / \`${p}banners @usuario\` — avatar o banner actual y el historial que el bot vio.`,
       `• \`${p}names @usuario\` — historial de nombres.`,
       `• \`${p}steal\` respondiendo a un mensaje — copia sus emojis o su sticker a este servidor (necesitás **Gestionar expresiones**). También en el menú del mensaje → Apps → **Robar emoji o sticker**.`,
+      `• \`${p}gif\` — convierte fotos (PNG o JPG) en GIF; con varias arma una animación. \`${p}uservalo Nombre#TAG\` (Valorant) y \`${p}cs2 <perfil de Steam>\` — estadísticas.`,
       `• 💎 **Premium** (\`${p}premium\`): \`${p}tags\`, \`${p}clearavatars\`, \`${p}clearnames\`, \`${p}cleartags\`, \`${p}mstats\`, \`${p}ghostmode\` y \`${p}botperfil\`. No da ventajas en el casino.`,
     ].join('\n'),
     voz: [
