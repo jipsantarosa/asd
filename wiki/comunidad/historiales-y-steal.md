@@ -10,6 +10,8 @@
 
 {% hint style="info" %}
 El historial es solo lo que el bot detectó desde que está en el servidor: no inventa cambios anteriores.
+
+El bot **guarda una copia de cada imagen** apenas la detecta, porque Discord borra la imagen vieja cuando alguien la cambia. Las que se vieron antes de esta función y Discord ya borró aparecen como casillas grises.
 {% endhint %}
 
 ## !steal

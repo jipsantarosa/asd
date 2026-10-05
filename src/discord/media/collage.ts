@@ -51,14 +51,25 @@ export interface Collage {
   missing: number;
 }
 
-export async function buildCollage(entries: MediaEntry[], kind: MediaKind, fetcher: (url: string) => Promise<Rgba | null> = (u) => fetchImage(u, 4000)): Promise<Collage | null> {
+/**
+ * `local` devuelve la copia guardada por el bot (si hay): se usa antes que la CDN, que borra las imágenes viejas.
+ */
+export async function buildCollage(
+  entries: MediaEntry[], kind: MediaKind,
+  fetcher: (url: string) => Promise<Rgba | null> = (u) => fetchImage(u, 4000),
+  local: (e: MediaEntry) => Buffer | null = () => null,
+): Promise<Collage | null> {
   const list = entries.slice(0, COLLAGE_MAX);
   if (!list.length) return null;
   const L = LAYOUT[kind];
   const cols = Math.min(L.cols, list.length);
   const rows = Math.ceil(list.length / cols);
   const canvas = blank(cols * L.w + (cols - 1) * GAP, rows * L.h + (rows - 1) * GAP);
-  const images = await mapLimit(list, 6, (e) => fetcher(thumbUrl(e.url, L.size)));
+  const images = await mapLimit(list, 6, async (e) => {
+    const saved = local(e);
+    const img = saved ? decodePng(saved) : null;
+    return img ?? fetcher(thumbUrl(e.url, L.size));
+  });
   let missing = 0;
   images.forEach((img, i) => {
     const x = (i % cols) * (L.w + GAP);

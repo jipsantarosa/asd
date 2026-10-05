@@ -88,3 +88,67 @@ describe('kiss: corresponder y rechazar', () => {
     assert.equal(kissBack(w.ctx, 'msg4', G, U2, U).pair, 1, 'la marca del intento fallido se deshizo con la transacción');
   });
 });
+
+describe('archivo de avatares (las imágenes se guardan en la base)', () => {
+  const H1 = 'a'.repeat(32);
+  const H2 = 'b'.repeat(32);
+  const HA = `a_${'c'.repeat(32)}`;
+
+  it('guarda la imagen apenas la ve y el collage la usa aunque Discord ya no la tenga', async () => {
+    const { recordMedia, mediaHistory } = await import('../src/services/userMedia');
+    const { MediaArchiver } = await import('../src/discord/media/archive');
+    const { getMediaFile, archiveStats } = await import('../src/services/mediaArchive');
+    const w = makeWorld();
+    const png = encodePng(fill(blank(8, 8), 10, 200, 10));
+    const seen: string[] = [];
+    const archiver = new MediaArchiver(w.ctx, async (url) => {
+      seen.push(url);
+      return { status: 200, body: url.includes('.gif') ? Buffer.from('GIF89a') : png };
+    });
+    recordMedia(w.ctx, U, 'avatar', H1);
+    archiver.ensure(U, 'avatar', H1);
+    recordMedia(w.ctx, U, 'avatar', HA);
+    archiver.ensure(U, 'avatar', HA);
+    archiver.ensure(U, 'avatar', H1); // repetido: no se baja dos veces
+    await archiver.idle();
+    assert.deepEqual(getMediaFile(w.ctx, U, 'avatar', H1)!.png, png);
+    assert.equal(getMediaFile(w.ctx, U, 'avatar', HA)!.gif!.toString(), 'GIF89a', 'los animados también se guardan como GIF');
+    assert.equal(seen.length, 3);
+    assert.equal(archiveStats(w.ctx).ok, 2);
+
+    // Después Discord ya no tiene ninguna: el collage sale igual con las copias guardadas.
+    const history = mediaHistory(w.ctx, U, 'avatar');
+    const c = (await buildCollage(history, 'avatar', async () => null, (e) => getMediaFile(w.ctx, U, 'avatar', e.hash)?.png ?? null))!;
+    assert.equal(c.missing, 0);
+  });
+
+  it('si Discord ya la borró queda como no disponible; si falla la red se reintenta', async () => {
+    const { recordMedia } = await import('../src/services/userMedia');
+    const { MediaArchiver } = await import('../src/discord/media/archive');
+    const { mediaFileStatus, unarchivedMedia, MAX_ATTEMPTS } = await import('../src/services/mediaArchive');
+    const w = makeWorld();
+    recordMedia(w.ctx, U, 'avatar', H1);
+    recordMedia(w.ctx, U, 'avatar', H2);
+    const gone = new MediaArchiver(w.ctx, async (url) => ({ status: url.includes(H1) ? 404 : 0, body: null }));
+    assert.equal(gone.backfill(), 2);
+    await gone.idle();
+    assert.equal(mediaFileStatus(w.ctx, U, 'avatar', H1), 'gone');
+    assert.equal(mediaFileStatus(w.ctx, U, 'avatar', H2), 'pending');
+    assert.deepEqual(unarchivedMedia(w.ctx).map((x) => x.hash), [H2], 'lo que desapareció no se reintenta');
+    for (let i = 1; i < MAX_ATTEMPTS; i++) {
+      gone.ensure(U, 'avatar', H2);
+      await gone.idle();
+    }
+    assert.equal(mediaFileStatus(w.ctx, U, 'avatar', H2), 'gone', 'después de varios intentos se deja de intentar');
+  });
+
+  it('borrar el historial (premium) también borra las copias guardadas', async () => {
+    const { recordMedia, clearMedia } = await import('../src/services/userMedia');
+    const { saveMediaFile, getMediaFile } = await import('../src/services/mediaArchive');
+    const w = makeWorld();
+    recordMedia(w.ctx, U, 'avatar', H1);
+    saveMediaFile(w.ctx, U, 'avatar', H1, encodePng(blank(2, 2)), null);
+    clearMedia(w.ctx, U, ['avatar']);
+    assert.equal(getMediaFile(w.ctx, U, 'avatar', H1), null);
+  });
+});

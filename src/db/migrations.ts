@@ -1119,6 +1119,27 @@ UPDATE casino_config SET value = json_set(value,
 WHERE key = 'main' AND json_valid(value);
 `,
   },
+  {
+    id: 18,
+    name: 'archivo_de_avatares',
+    sql: `
+-- Copia de cada avatar/banner detectado. Discord borra la imagen vieja de su CDN cuando alguien la cambia,
+-- así que el historial guarda la imagen misma (PNG, y GIF si es animado) apenas la ve.
+-- status: 'ok' guardada · 'pending' falta bajarla (se reintenta) · 'gone' Discord ya no la tenía.
+CREATE TABLE user_media_files (
+  user_id  TEXT NOT NULL,
+  kind     TEXT NOT NULL CHECK (kind IN ('avatar', 'banner')),
+  hash     TEXT NOT NULL,
+  status   TEXT NOT NULL CHECK (status IN ('ok', 'pending', 'gone')),
+  png      BLOB,
+  gif      BLOB,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  saved_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, kind, hash)
+);
+CREATE INDEX ix_user_media_files_status ON user_media_files (status, saved_at);
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

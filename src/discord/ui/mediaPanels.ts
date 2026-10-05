@@ -3,6 +3,8 @@ import type { GameContext } from '../../services/context';
 import { mediaHistory, trackingSince, type MediaEntry, type MediaKind } from '../../services/userMedia';
 import { row, type Panel } from '../app';
 import { buildCollage, type Collage } from '../media/collage';
+import { ensureArchived } from '../media/archive';
+import { getMediaFile } from '../../services/mediaArchive';
 import { cid } from './ids';
 import { COLORS } from './theme';
 
@@ -16,11 +18,11 @@ const t = (ms: number, style: 'f' | 'R' | 'd') => `<t:${Math.floor(ms / 1000)}:$
 
 // Caché chica del collage (10 min): cambiar de vista en el menú no vuelve a descargar todo.
 const cache = new Map<string, { at: number; collage: Collage }>();
-async function cachedCollage(userId: string, kind: MediaKind, entries: MediaEntry[]): Promise<Collage | null> {
+async function cachedCollage(ctx: GameContext, userId: string, kind: MediaKind, entries: MediaEntry[]): Promise<Collage | null> {
   const key = `${userId}:${kind}:${entries.map((e) => e.hash).join(',')}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 600_000) return hit.collage;
-  const collage = await buildCollage(entries, kind);
+  if (hit && Date.now() - hit.at < 600_000 && !hit.collage.missing) return hit.collage;
+  const collage = await buildCollage(entries, kind, undefined, (e) => getMediaFile(ctx, userId, kind, e.hash)?.png ?? null);
   if (collage) {
     if (cache.size > 100) cache.clear();
     cache.set(key, { at: Date.now(), collage });
@@ -51,6 +53,9 @@ export async function mediaPanel(ctx: GameContext, owner: string, user: User, ki
     return { embeds: [embed], components: [statsRow] };
   }
 
+  // Lo que todavía no está guardado se guarda ahora (si Discord todavía lo tiene).
+  for (const e of history) ensureArchived(user.id, kind, e.hash);
+
   const select = new StringSelectMenuBuilder().setCustomId(cid('av', 'sel', owner, kind, user.id)).setPlaceholder(L.many)
     .addOptions(
       new StringSelectMenuOptionBuilder().setValue('c').setLabel('Ver todos (collage)').setEmoji('🧩').setDefault(view === 'collage'),
@@ -61,11 +66,11 @@ export async function mediaPanel(ctx: GameContext, owner: string, user: User, ki
   const components = [row(select), statsRow];
 
   if (view === 'collage') {
-    const collage = await cachedCollage(user.id, kind, history);
+    const collage = await cachedCollage(ctx, user.id, kind, history);
     embed.setDescription([
       `${L.emoji} Aquí está el historial de ${L.manyLower} de **${name}**`,
       `-# ${history.length} detectado${history.length === 1 ? '' : 's'} desde el ${sinceText} · el más reciente arriba a la izquierda`,
-      collage?.missing ? `-# ⬛ ${collage.missing} ya no ${collage.missing === 1 ? 'está' : 'están'} disponible${collage.missing === 1 ? '' : 's'} en Discord.` : '',
+      collage?.missing ? `-# ⬛ ${collage.missing} ya no ${collage.missing === 1 ? 'estaba' : 'estaban'} en Discord cuando el bot intentó guardarl${collage.missing === 1 ? 'a' : 'as'} (de antes de esta versión).` : '',
     ].filter(Boolean).join('\n'));
     embed.setFooter({ text: `Elegí uno en el menú para verlo en grande · No incluye cambios anteriores al ${sinceText}.` });
     if (collage) {
@@ -80,16 +85,24 @@ export async function mediaPanel(ctx: GameContext, owner: string, user: User, ki
   const i = Math.min(Math.max(0, view), history.length - 1);
   const e = history[i];
   const isCurrent = currentHash ? e.hash === currentHash : i === 0;
+  // La copia guardada por el bot (la de Discord desaparece cuando la persona cambia la imagen).
+  const saved = getMediaFile(ctx, user.id, kind, e.hash);
+  const files: AttachmentBuilder[] = [];
+  if (saved) {
+    const fileName = `${kind}_${i + 1}.${saved.gif ? 'gif' : 'png'}`;
+    files.push(new AttachmentBuilder(saved.gif ?? saved.png!, { name: fileName }));
+    embed.setImage(`attachment://${fileName}`);
+  } else embed.setImage(e.url);
   embed
-    .setImage(e.url)
     .setDescription([
       `${L.emoji} **${L.one[0].toUpperCase()}${L.one.slice(1)} #${i + 1}** de **${name}** · ${isCurrent ? '🟢 Actual' : 'Anterior'}${e.hash.startsWith('a_') ? ' · animado' : ''}`,
       `Detectado por primera vez ${t(e.firstSeenAt, 'f')}`,
       e.lastSeenAt !== e.firstSeenAt ? `Visto por última vez ${t(e.lastSeenAt, 'R')}` : '',
-      `[Abrir en tamaño completo](${e.url.replace(/size=\d+/, 'size=4096')})`,
+      saved ? '💾 Guardada por el bot' : '⬛ El bot no llegó a guardar esta imagen (puede que ya no esté en Discord).',
+      isCurrent ? `[Abrir en tamaño completo](${e.url.replace(/size=\d+/, 'size=4096')})` : '',
     ].filter(Boolean).join('\n'))
-    .setFooter({ text: 'Las imágenes viejas pueden dejar de estar en la CDN de Discord.' });
-  return { embeds: [embed], components };
+    .setFooter({ text: 'El bot guarda una copia de cada imagen apenas la detecta.' });
+  return { embeds: [embed], components, files };
 }
 
 /** "Mis estadísticas": lo que el bot detectó de quien toca el botón (respuesta privada). */

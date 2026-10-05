@@ -3,6 +3,7 @@ import { logger } from '../../logger';
 import { recordMedia } from '../../services/userMedia';
 import { recordName } from '../../services/userNames';
 import type { App } from '../app';
+import { ensureArchived, MediaArchiver, setArchiver } from '../media/archive';
 
 /**
  * Detecta cambios de avatar, banner, nombres y tags mientras el bot está presente:
@@ -20,7 +21,20 @@ export function serverTag(user: User): { tag: string; guildId: string } | null {
   return { tag: pg.tag, guildId: pg.identityGuildId ?? '' };
 }
 
-export function startMediaTracking(app: App): void {
+export function startMediaTracking(app: App): NodeJS.Timeout {
+  // Archivo de imágenes: guarda cada avatar/banner nuevo y, cada 10 minutos, reintenta los que faltan.
+  const archiver = new MediaArchiver(app.ctx);
+  setArchiver(archiver);
+  const backfill = () => {
+    try {
+      archiver.backfill(200);
+    } catch (err) {
+      logger.warn('Archivo de avatares:', err);
+    }
+  };
+  setTimeout(backfill, 30_000).unref();
+  const timer = setInterval(backfill, 10 * 60_000);
+  timer.unref();
   const lastUser = new Map<string, string>();
   const lastNick = new Map<string, string>();
 
@@ -37,8 +51,13 @@ export function startMediaTracking(app: App): void {
     lastUser.set(user.id, key);
     try {
       recordMedia(app.ctx, user.id, 'avatar', user.avatar, guildId);
+      // Se guarda la imagen ya (Discord la borra de su CDN cuando la persona la cambia).
+      ensureArchived(user.id, 'avatar', user.avatar);
       // `banner` es undefined si Discord no lo mandó (no es lo mismo que "sin banner").
-      if (user.banner) recordMedia(app.ctx, user.id, 'banner', user.banner, guildId);
+      if (user.banner) {
+        recordMedia(app.ctx, user.id, 'banner', user.banner, guildId);
+        ensureArchived(user.id, 'banner', user.banner);
+      }
       recordName(app.ctx, user.id, 'username', user.username);
       recordName(app.ctx, user.id, 'display', user.globalName);
       if (tag) recordName(app.ctx, user.id, 'tag', tag.tag, tag.guildId);
@@ -75,6 +94,7 @@ export function startMediaTracking(app: App): void {
     seenMember(member);
   });
   app.client.on(Events.GuildMemberAdd, (member) => seenMember(member));
+  return timer;
 }
 
 /** Pide el usuario completo (con banner) y registra lo que vea. Para los comandos. */
@@ -83,6 +103,8 @@ export async function fetchAndRecord(app: App, userId: string, guildId: string |
   if (!user) return null;
   recordMedia(app.ctx, user.id, 'avatar', user.avatar, guildId);
   recordMedia(app.ctx, user.id, 'banner', user.banner, guildId);
+  ensureArchived(user.id, 'avatar', user.avatar);
+  ensureArchived(user.id, 'banner', user.banner);
   recordName(app.ctx, user.id, 'username', user.username);
   recordName(app.ctx, user.id, 'display', user.globalName);
   const tag = serverTag(user);

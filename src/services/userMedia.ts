@@ -51,5 +51,7 @@ export function trackingSince(ctx: GameContext): number | null {
 /** Borra el historial propio de avatares y/o banners (premium). Devuelve cuántas imágenes se borraron. */
 export function clearMedia(ctx: GameContext, userId: string, kinds: MediaKind[]): number {
   const marks = kinds.map(() => '?').join(', ');
+  // También las imágenes guardadas: borrar el historial borra las copias.
+  ctx.db.run(`DELETE FROM user_media_files WHERE user_id = ? AND kind IN (${marks})`, userId, ...kinds);
   return ctx.db.run(`DELETE FROM user_media WHERE user_id = ? AND kind IN (${marks})`, userId, ...kinds).changes;
 }
