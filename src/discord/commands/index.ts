@@ -6,6 +6,7 @@ import { logSystem } from '../logging/sender';
 import { runSetup } from '../logging/setup';
 import { maintenanceRow } from '../setupMaintenance';
 import { helpPanel } from '../ui/helpPanel';
+import { helpFor, registerHelpCommands } from '../ui/helpMenu';
 import { rolesAdminPanel } from '../ui/rolesPanel';
 import { settingsPanel } from '../ui/settingsPanel';
 import { COLORS } from '../ui/theme';
@@ -27,9 +28,17 @@ const ayuda: Command = {
   name: 'ayuda',
   aliases: ['help', 'h', 'comandos'],
   prefix: true,
-  data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('ayuda').setDescription('Guía del casino y lista de comandos.'),
+  data: new SlashCommandBuilder().setContexts(InteractionContextType.Guild).setName('ayuda').setDescription('📚 Todos los comandos por categoría, o el detalle de uno.')
+    .addStringOption((o) => o.setName('buscar').setDescription('Una categoría (casino, juegos…) o un comando (work, kiss…)').setMaxLength(32)),
   async run(c) {
-    await c.reply(helpPanel(c.app.ctx, c.viewer), { ephemeral: true });
+    const q = c.text('buscar', 0);
+    if (q && ['guia', 'guía', 'guide'].includes(q.toLowerCase())) {
+      await c.reply(helpPanel(c.app.ctx, c.viewer), { ephemeral: true });
+      return;
+    }
+    const panel = helpFor(c.app.ctx, c.viewer, q, c.app.client.user?.displayAvatarURL({ size: 128 }));
+    if (!panel) throw new GameError(`No encontré la categoría ni el comando **${q}**. Probá con \`${c.prefix}help\` para ver todo.`);
+    await c.reply(panel);
   },
 };
 
@@ -125,6 +134,8 @@ for (const cmd of COMMANDS) {
     byName.set(n, cmd);
   }
 }
+
+registerHelpCommands(COMMANDS);
 
 export function findCommand(name: string): Command | undefined {
   return byName.get(name.toLowerCase());

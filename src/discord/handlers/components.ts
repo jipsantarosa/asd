@@ -24,6 +24,7 @@ import { randomKissGif } from '../fun/kissGif';
 import { answeredText, claimKissReply, getKiss, kissBack, rejectKiss, returnKiss, setKissReply } from '../../services/social';
 import { cid } from '../ui/ids';
 import { HELP_PAGE_IDS, helpPanel, type HelpPage } from '../ui/helpPanel';
+import { findHelpCategory, helpCategory, helpHome } from '../ui/helpMenu';
 import { publicGroupMessage, rolePicker, rolesAdminPanel } from '../ui/rolesPanel';
 import { settingsPanel } from '../ui/settingsPanel';
 import { CASINO_HANDLERS } from '../casino/handlers';
@@ -53,6 +54,17 @@ function requirePerm(i: Ix, perm: bigint, name: string): void {
 
 const helpHandler: Handler = async (app, i) => {
   await update(i, helpPanel(app.ctx, viewerOf(i.member), oneOf<HelpPage>(values(i)[0], HELP_PAGE_IDS)));
+};
+
+const helpMenuHandler: Handler = async (app, i, id) => {
+  const v = viewerOf(i.member);
+  const avatar = app.client.user?.displayAvatarURL({ size: 128 });
+  if (id.act === 'guide') return update(i, helpPanel(app.ctx, v));
+  if (id.act === 'home') return update(i, helpHome(app.ctx, v, avatar));
+  if (id.act !== 'cat') throw new GameError('Acción desconocida.');
+  const pick = values(i)[0];
+  const cat = pick && pick !== 'inicio' ? findHelpCategory(pick) : null;
+  await update(i, cat ? helpCategory(app.ctx, v, cat) : helpHome(app.ctx, v, avatar));
 };
 
 // ───────────────────────── ajustes del servidor ─────────────────────────
@@ -432,6 +444,7 @@ export const HANDLERS: Record<string, Handler> = {
   cx: stealHandler,
   sy: maintenanceHandler,
   mr: marryHandler,
+  hm: helpMenuHandler,
   tp: templateHandler,
   ...CASINO_HANDLERS,
 };

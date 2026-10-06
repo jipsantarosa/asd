@@ -1,4 +1,4 @@
-import { EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
+import { ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import type { GameContext } from '../../services/context';
 import { getSettings } from '../../services/guildSettings';
 import { row, type Panel, type Viewer } from '../app';
@@ -198,6 +198,7 @@ export function helpPanel(ctx: GameContext, v: Viewer, page: HelpPage = 'inicio'
     components: [
       row(new StringSelectMenuBuilder().setCustomId(cid('hp', 'page', v.userId)).setPlaceholder(lang === 'en' ? 'Topic…' : 'Tema…')
         .addOptions(HELP_PAGES.map((h) => new StringSelectMenuOptionBuilder().setValue(h.id).setLabel(label(h)).setEmoji(h.emoji).setDefault(h.id === page)))),
+      row(new ButtonBuilder().setCustomId(cid('hm', 'home', v.userId)).setLabel(lang === 'en' ? 'All commands' : 'Todos los comandos').setEmoji('📚').setStyle(ButtonStyle.Secondary)),
     ],
   };
 }
