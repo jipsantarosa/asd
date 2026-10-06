@@ -98,3 +98,13 @@ describe('!cs2', () => {
     await expectGameError(fetchCs2('alguien', 'K', fetcher), /privado/);
   });
 });
+
+describe('enlaces a Tracker.gg y CSRep.gg', () => {
+  it('arma los enlaces de perfil', async () => {
+    const { trackerUrl, csrepUrl, steamProfileUrl } = await import('../src/services/gameStats');
+    assert.equal(trackerUrl('el pibe', 'LAS'), 'https://tracker.gg/valorant/profile/riot/el%20pibe%23LAS/overview');
+    assert.equal(csrepUrl('76561198000000001', 'https://csrep.gg/player/{steamid}'), 'https://csrep.gg/player/76561198000000001');
+    assert.equal(csrepUrl('76561198000000001', 'https://otra.gg/p/{steamid}/stats'), 'https://otra.gg/p/76561198000000001/stats');
+    assert.equal(steamProfileUrl({ vanity: 's1mple' }), 'https://steamcommunity.com/id/s1mple');
+  });
+});

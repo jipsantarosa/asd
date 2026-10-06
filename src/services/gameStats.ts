@@ -229,3 +229,22 @@ export async function fetchCs2(raw: string, key: string, fetcher: JsonFetcher = 
     stats: readCs2Stats(st.json),
   };
 }
+
+// ───────────────────────── Enlaces a las páginas de estadísticas ─────────────────────────
+
+/** Perfil de Valorant en Tracker.gg (el # del Riot ID va codificado). */
+export function trackerUrl(name: string, tag: string): string {
+  return `https://tracker.gg/valorant/profile/riot/${encodeURIComponent(`${name}#${tag}`)}/overview`;
+}
+
+/**
+ * Perfil de CS2 en CSRep.gg. El formato del enlace se puede cambiar con CSREP_PROFILE_URL en el .env
+ * ({steamid} se reemplaza por el SteamID64), por si la página lo cambia.
+ */
+export function csrepUrl(steamId: string, template = process.env.CSREP_PROFILE_URL?.trim() || 'https://csrep.gg/player/{steamid}'): string {
+  return template.replace('{steamid}', steamId);
+}
+
+export function steamProfileUrl(input: { steamId: string } | { vanity: string }): string {
+  return 'steamId' in input ? `https://steamcommunity.com/profiles/${input.steamId}` : `https://steamcommunity.com/id/${input.vanity}`;
+}

@@ -1,6 +1,7 @@
-import { AttachmentBuilder, EmbedBuilder, InteractionContextType, SlashCommandBuilder, type Message } from 'discord.js';
+import { AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, InteractionContextType, SlashCommandBuilder, type Message } from 'discord.js';
 import { GameError } from '../../services/context';
-import { fetchCs2, fetchValorant, valoSummary } from '../../services/gameStats';
+import { csrepUrl, fetchCs2, fetchValorant, parseRiotId, parseSteamInput, steamProfileUrl, trackerUrl, valoSummary } from '../../services/gameStats';
+import { row } from '../app';
 import { decodeImage, encodeGif, GIF_MAX_FRAMES, GIF_MAX_INPUT } from '../media/gif';
 import { clean } from '../ui/theme';
 import type { Command, CommandContext } from './types';
@@ -72,8 +73,6 @@ export const gifCmd: Command = {
 
 // ───────────────────────── !uservalo ─────────────────────────
 
-const NEED_HENRIK = 'Para ver estadísticas de Valorant falta la clave de la API. El dueño del bot tiene que conseguir una gratis en el Discord de **HenrikDev** (https://docs.henrikdev.xyz) y ponerla en el `.env` como `HENRIK_API_KEY=...`.';
-const NEED_STEAM = 'Para ver estadísticas de CS2 falta la clave de Steam. El dueño del bot la saca gratis en https://steamcommunity.com/dev/apikey y la pone en el `.env` como `STEAM_API_KEY=...`.';
 
 export const valoCmd: Command = {
   name: 'uservalo',
@@ -84,8 +83,19 @@ export const valoCmd: Command = {
   async run(c) {
     const raw = c.text('riot_id', 0);
     if (!raw) throw new GameError(`Uso: \`${c.prefix}uservalo Nombre#TAG\`.`);
+    const id = parseRiotId(raw);
+    const links = (name: string, tag: string) => [row(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(trackerUrl(name, tag)).setLabel('Ver en Tracker.gg').setEmoji('📊'))];
     const key = process.env.HENRIK_API_KEY?.trim();
-    if (!key) throw new GameError(NEED_HENRIK);
+    if (!key) {
+      // Sin clave: igual se puede abrir el perfil completo en Tracker.gg.
+      await c.reply({
+        embeds: [new EmbedBuilder().setColor(0xfd4556).setTitle(`🎯 ${clean(id.name)}#${clean(id.tag)}`)
+          .setDescription('Tocá el botón para ver rango, partidas y estadísticas completas en **Tracker.gg**.')
+          .setFooter({ text: 'Para verlas acá mismo, el dueño del bot tiene que poner HENRIK_API_KEY en el .env.' })],
+        components: links(id.name, id.tag),
+      });
+      return;
+    }
     await c.defer();
     const p = await fetchValorant(raw, key);
     const s = valoSummary(p.matches);
@@ -109,8 +119,8 @@ export const valoCmd: Command = {
       );
     }
     if (p.card) e.setImage(p.card);
-    e.setFooter({ text: 'Datos de la API de HenrikDev (no oficial de Riot).' });
-    await c.reply({ embeds: [e] });
+    e.setFooter({ text: 'Datos de la API de HenrikDev (no oficial de Riot). Más detalles en Tracker.gg.' });
+    await c.reply({ embeds: [e], components: links(p.name, p.tag) });
   },
 };
 
@@ -125,8 +135,25 @@ export const cs2Cmd: Command = {
   async run(c) {
     const raw = c.text('steam', 0);
     if (!raw) throw new GameError(`Uso: \`${c.prefix}cs2 <enlace de tu perfil de Steam>\`.`);
+    const input = parseSteamInput(raw);
+    const links = (steamId: string | null, steamUrl: string) => [row(
+      ...(steamId ? [new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(csrepUrl(steamId)).setLabel('Ver en CSRep.gg').setEmoji('📊')] : []),
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(steamUrl).setLabel('Perfil de Steam').setEmoji('🎮'),
+    )];
     const key = process.env.STEAM_API_KEY?.trim();
-    if (!key) throw new GameError(NEED_STEAM);
+    if (!key) {
+      // Sin clave: con el SteamID64 (o el enlace /profiles/...) igual se puede abrir CSRep.gg.
+      const steamId = 'steamId' in input ? input.steamId : null;
+      await c.reply({
+        embeds: [new EmbedBuilder().setColor(0xde9b35).setTitle('🔫 Counter-Strike 2')
+          .setDescription(steamId
+            ? 'Tocá el botón para ver estadísticas, reputación y partidas en **CSRep.gg**.'
+            : 'Para abrir **CSRep.gg** necesito el enlace `steamcommunity.com/profiles/...` o el SteamID64 (con un nombre personalizado solo puedo abrir el perfil de Steam).')
+          .setFooter({ text: 'Para verlas acá mismo, el dueño del bot tiene que poner STEAM_API_KEY en el .env.' })],
+        components: links(steamId, steamProfileUrl(input)),
+      });
+      return;
+    }
     await c.defer();
     const p = await fetchCs2(raw, key);
     const s = p.stats;
@@ -143,8 +170,8 @@ export const cs2Cmd: Command = {
         { name: 'Partidas ganadas', value: `${num(s.matchesWon)}${s.winPct !== null ? ` (${s.winPct}%)` : ''}`, inline: true },
         { name: 'MVPs', value: num(s.mvps), inline: true },
       )
-      .setFooter({ text: 'Estadísticas totales que publica Steam (necesita el perfil y los detalles del juego en público).' });
-    await c.reply({ embeds: [e] });
+      .setFooter({ text: 'Estadísticas totales que publica Steam. Reputación y partidas recientes en CSRep.gg.' });
+    await c.reply({ embeds: [e], components: links(p.steamId, p.url) });
   },
 };
 
