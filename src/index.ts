@@ -23,6 +23,7 @@ import { autoSyncLayouts } from './discord/setupMaintenance';
 import { startServerTools } from './discord/commands/serverTools';
 import { startAutoRole } from './discord/commands/autoRole';
 import { startPremiumRoles } from './discord/commands/premiumRoles';
+import { startShop } from './discord/commands/shop';
 import path from 'node:path';
 import { acquireInstanceLock } from './instanceLock';
 
@@ -87,6 +88,8 @@ async function main(): Promise<void> {
   startAutoRole(app);
   // Roles premium (/rolespremium): se dan y se quitan solos según el nivel de cada persona.
   const premiumRoles = startPremiumRoles(app);
+  // Tienda: si borran a mano el canal de un ticket, queda cerrado.
+  startShop(app);
   client.on(Events.Error, (e) => logger.error('Error del cliente:', e));
 
   // Un canal borrado deja de figurar en los ajustes del casino.

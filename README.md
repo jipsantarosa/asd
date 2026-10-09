@@ -67,6 +67,9 @@ La configuración y los saldos están en `data/valle.db` y el token en `.env`. P
 - **Migración 14:** plantillas de servidor guardadas (`/plantilla`).
 - **Migración 15:** autoroles (personas y bots).
 - **Migración 16:** roles premium por servidor.
+- **Migración 17:** trabajos con riesgo (esperas por trabajo y racha).
+- **Migración 18:** copias de las imágenes del historial de avatares y banners.
+- **Migración 19:** tienda y tickets de compra.
 - **Migración 12:** guarda la versión del diseño de los canales del bot aplicada en cada servidor (para actualizarlos solos).
 - **Migración 11:** trabajos (`!work`) y economía más dura.
 - **Migración 10 (casino):** crea billeteras, transacciones, rondas, semillas, estadísticas por juego, logros, torneos, actividad, configuración, pozos, ajustes por servidor, distinciones por nivel, lluvias de monedas y el registro administrativo. **No borra nada**: las tablas de la granja y la pesca quedan intactas (aunque ya no se usan). Quien tenía monedas en la granja recibe, al abrir su cuenta del casino, un **bono de bienvenida** único (1 Coin cada 1.000 monedas viejas, sumando servidores, con tope de 2.500).
@@ -162,6 +165,7 @@ Un mensaje paga (1 a 3 Coins) solo si no es un comando, tiene al menos 8 letras 
 | `!setlang es` · `!setlang en` | ver: todos · cambiar: Gestionar servidor | Idioma del bot en el servidor |
 | `/setupdiscord` · `!setupdiscord` | dueño del bot | Arma el servidor oficial del bot (anuncios, novedades, invitación, reglas, casino, comunidad, soporte, staff, roles y autorroles). Muestra una vista previa; sin emojis, con autorol Miembro/Bots |
 | `/plantilla copiar·pegar·importar·archivo·lista·borrar` | dueño del bot | Copia la estructura de un servidor (roles, categorías, canales y permisos) y la pega en otro; también como archivo `.json` editable. Al pegar se elige: crear sin borrar nada, o borrar todos los canales y crear (con doble confirmación y respaldo automático `respaldo-…`) |
+| `/tienda` · `!tienda` | Gestionar servidor | Tienda: productos con embed editable (título, descripción, precios en ARS y USD, stock, imagen, color y texto del botón) y botón **Comprar** que abre un ticket privado con el staff; marcar vendido descuenta el stock; al cerrar, la transcripción va al canal de registro |
 | `/gif` · `!gif` (con fotos adjuntas, respondiendo a una foto o `!gif @usuario`) | todos | Convierte fotos PNG o JPG en GIF; con varias (hasta 10) arma una animación |
 | `/uservalo` · `!uservalo Nombre#TAG` | todos | Valorant: nivel, rango, mejor rango y últimas 5 partidas (K/D, HS %). Necesita `HENRIK_API_KEY` en el `.env` |
 | `/cs2` · `!cs2 <perfil de Steam>` | todos | CS2: K/D, headshots, precisión, horas, partidas ganadas y MVPs. Necesita `STEAM_API_KEY` en el `.env` y el perfil público |

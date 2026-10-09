@@ -42,6 +42,7 @@
 * [Canales de voz temporales](servidor/voz-temporal.md)
 * [Roles y distinciones](servidor/roles.md)
 * [Boost tracker](servidor/boost-tracker.md)
+* [Tienda y tickets](servidor/tienda.md)
 * [Ajustes e idioma](servidor/ajustes-e-idioma.md)
 
 ## Seguridad y moderación

@@ -27,6 +27,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
   { id: 'perfiles', name: 'Historiales', emoji: '🕵️', blurb: 'Avatares, banners, nombres y tags.', commands: ['avatares', 'banners', 'names', 'tags'] },
   { id: 'diversion', name: 'Diversión', emoji: '🎮', blurb: 'GIFs, emojis y estadísticas de juegos.', commands: ['gif', 'uservalo', 'cs2', 'steal'] },
   { id: 'premium', name: 'Premium', emoji: '💎', blurb: 'Funciones extra para quien tiene premium.', commands: ['premium', 'clearavatars', 'clearnames', 'cleartags', 'mstats', 'ghostmode', 'botperfil'] },
+  { id: 'tienda', name: 'Tienda', emoji: '🛒', blurb: 'Productos con botón de compra y tickets.', commands: ['tienda'] },
   { id: 'voz', name: 'Voz', emoji: '🔊', blurb: 'Canales de voz temporales.', commands: ['canal', 'voz'] },
   { id: 'moderacion', name: 'Moderación', emoji: '🛡️', blurb: 'Sanciones, casos, automod y limpieza.', commands: ['mod', 'warn', 'timeout', 'untimeout', 'kick', 'ban', 'unban', 'modlogs', 'caso', 'purgar', 'automod'] },
   { id: 'config', name: 'Configuración', emoji: '⚙️', blurb: 'Ajustes del servidor y del bot.', commands: ['ayuda', 'prefijo', 'setlang', 'ajustes', 'setup', 'roles', 'autorol', 'rolespremium', 'boosttracker', 'anti-webhooks'] },

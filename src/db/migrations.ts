@@ -1140,6 +1140,53 @@ CREATE TABLE user_media_files (
 CREATE INDEX ix_user_media_files_status ON user_media_files (status, saved_at);
 `,
   },
+  {
+    id: 19,
+    name: 'tienda_y_tickets',
+    sql: `
+-- Tienda (/tienda): productos con embed y botón "Comprar" que abre un ticket privado.
+CREATE TABLE shop_config (
+  guild_id       TEXT PRIMARY KEY,
+  category_id    TEXT,
+  staff_role_id  TEXT,
+  log_channel_id TEXT,
+  ticket_counter INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL
+);
+CREATE TABLE shop_products (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL,
+  price_ars   TEXT NOT NULL DEFAULT '',
+  price_usd   TEXT NOT NULL DEFAULT '',
+  stock       INTEGER,
+  image_url   TEXT,
+  color       INTEGER NOT NULL,
+  button      TEXT NOT NULL,
+  channel_id  TEXT,
+  message_id  TEXT,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX ix_shop_products_guild ON shop_products (guild_id, id);
+CREATE TABLE shop_tickets (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT NOT NULL,
+  number      INTEGER NOT NULL,
+  product_id  INTEGER,
+  user_id     TEXT NOT NULL,
+  channel_id  TEXT,
+  status      TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  sold        INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  closed_at   INTEGER,
+  closed_by   TEXT
+);
+CREATE INDEX ix_shop_tickets_open ON shop_tickets (guild_id, user_id, status);
+CREATE UNIQUE INDEX ux_shop_tickets_channel ON shop_tickets (channel_id) WHERE channel_id IS NOT NULL;
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {
