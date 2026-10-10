@@ -24,7 +24,7 @@ $Mensajes = @(
 # canal" y pegarlo entero en $CanalId (o poner los numeros del enlace por separado:
 # https://discord.com/channels/SERVIDOR/CANAL). Con $CanalId = '' se usa el canal abierto.
 # Solo la app de escritorio puede cambiar de canal; en el navegador se usa el que este abierto.
-$ServidorId = ''
+$ServidorId = '1536949928872378438'
 $CanalId    = '1543948984886763611'
 
 # Nunca se mandan dos mensajes con menos de estos segundos de diferencia.
