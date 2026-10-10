@@ -59,11 +59,11 @@ La configuración y los saldos están en `data/valle.db` y el token en `.env`. P
 
 ### Mensajes automáticos en tu cuenta (`auto-mensajes.bat`)
 
-Herramienta aparte del bot, solo para Windows: escribe y envía mensajes desde **tu** Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Trae la ventana de Discord al frente, escribe el mensaje como el teclado, aprieta Enter y te devuelve a la ventana que estabas usando. No usa token: el mensaje va al canal que esté abierto en Discord.
+Herramienta aparte del bot, solo para Windows: escribe y envía mensajes desde **tu** Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Trae la ventana de Discord al frente, abre el canal configurado, escribe el mensaje como el teclado, aprieta Enter y te devuelve a la ventana que estabas usando. No usa token.
 
 - Hacé doble clic en **`auto-mensajes.bat`** con Discord abierto en el canal correcto. Para detenerlo, cerrá la ventana.
 - La PC tiene que quedar desbloqueada (mientras corre, no se suspende). No conviene usarlo mientras jugás en pantalla completa.
-- Los mensajes y los tiempos se cambian arriba de todo en `scripts/auto-mensajes.ps1`.
+- Los mensajes, los tiempos y el canal se cambian arriba de todo en `scripts/auto-mensajes.ps1`. Para el canal: clic derecho en el canal → **Copiar enlace del canal** y pegalo en `$CanalId` (con la app de escritorio; en el navegador se usa el canal que esté abierto).
 - Automatizar una cuenta de usuario va contra los términos de Discord y muchos bots lo castigan: usalo bajo tu responsabilidad.
 
 ## 3. Base de datos y migraciones

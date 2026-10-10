@@ -4,10 +4,9 @@
 #   - "xfish 2"        5 segundos despues de cada xmine
 #   - "xpet explore 2" cada 45 minutos (la primera vez, despues del xfish)
 #
-# Como funciona: trae la ventana de Discord al frente, escribe el mensaje como si
-# fuera el teclado, aprieta Enter y te devuelve a la ventana que estabas usando.
-# No usa token: es como si lo escribieras vos, asi que el mensaje va al canal que
-# este abierto en Discord (la app de escritorio, o la pestana activa del navegador).
+# Como funciona: trae la ventana de Discord al frente, abre el canal configurado,
+# escribe el mensaje como si fuera el teclado, aprieta Enter y te devuelve a la
+# ventana que estabas usando. No usa token: es como si lo escribieras vos.
 #
 # Para detenerlo, cerra la ventana.
 
@@ -20,6 +19,13 @@ $Mensajes = @(
     @{ Texto = 'xfish 2';        CadaMinutos = 2;  PrimeraVez = 5  }
     @{ Texto = 'xpet explore 2'; CadaMinutos = 45; PrimeraVez = 10 }
 )
+
+# Canal donde se mandan. Lo mas facil: clic derecho en el canal > "Copiar enlace del
+# canal" y pegarlo entero en $CanalId (o poner los numeros del enlace por separado:
+# https://discord.com/channels/SERVIDOR/CANAL). Con $CanalId = '' se usa el canal abierto.
+# Solo la app de escritorio puede cambiar de canal; en el navegador se usa el que este abierto.
+$ServidorId = ''
+$CanalId    = '1543948984886763611'
 
 # Nunca se mandan dos mensajes con menos de estos segundos de diferencia.
 $SeparacionMinima = 5
@@ -89,18 +95,20 @@ function Escapar([string]$Texto) {
     [regex]::Replace($Texto, '[+^%~(){}\[\]]', '{$0}')
 }
 
+# Devuelve la ventana de Discord y, si es la app de escritorio, su protocolo para abrir
+# canales (discord://, discordptb:// o discordcanary://). $null si no esta abierto.
 function Buscar-Discord {
     $consola = [AutoMensajes.Ventanas]::GetConsoleWindow()
     $ventanas = @(Get-Process -ErrorAction SilentlyContinue |
         Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowHandle -ne $consola })
     # La app de escritorio (Discord, DiscordPTB o DiscordCanary).
     $app = $ventanas | Where-Object { $_.ProcessName -like 'Discord*' } | Select-Object -First 1
-    if ($app) { return $app.MainWindowHandle }
+    if ($app) { return [pscustomobject]@{ Ventana = $app.MainWindowHandle; Protocolo = $app.ProcessName.ToLower() } }
     # Discord en el navegador: tiene que ser la pestana activa.
     $web = $ventanas | Where-Object { $Navegadores -contains $_.ProcessName -and $_.MainWindowTitle -like '*Discord*' } |
         Select-Object -First 1
-    if ($web) { return $web.MainWindowHandle }
-    return [IntPtr]::Zero
+    if ($web) { return [pscustomobject]@{ Ventana = $web.MainWindowHandle; Protocolo = $null } }
+    return $null
 }
 
 # Si estas usando la PC, espera a que sueltes teclado y mouse 1 segundo (como mucho 10)
@@ -113,15 +121,27 @@ function Esperar-Inactividad {
 }
 
 function Enviar-Mensaje([string]$Texto) {
-    $discord = Buscar-Discord
-    if ($discord -eq [IntPtr]::Zero) {
+    $encontrado = Buscar-Discord
+    if (-not $encontrado) {
         Escribir-Log "No encontre Discord abierto: no envie '$Texto'. Abrilo (que no quede solo en la bandeja)." Yellow
         return
     }
+    $discord = $encontrado.Ventana
 
     Esperar-Inactividad
     $anterior = [AutoMensajes.Ventanas]::GetForegroundWindow()
     $minimizado = [AutoMensajes.Ventanas]::IsIconic($discord)
+
+    if ($Canal) {
+        if ($encontrado.Protocolo) {
+            # Como tocar un link al canal: la app lo abre (si ya estaba abierto, no cambia nada).
+            Start-Process "$($encontrado.Protocolo)://-/channels/$Canal"
+            Start-Sleep -Milliseconds 1500
+        } elseif (-not $script:AvisoNavegador) {
+            Escribir-Log 'Discord esta en el navegador: no puedo cambiar de canal, deja abierto el canal correcto.' Yellow
+            $script:AvisoNavegador = $true
+        }
+    }
 
     $enfocado = $false
     for ($intento = 1; $intento -le 3 -and -not $enfocado; $intento++) {
@@ -153,6 +173,18 @@ function Enviar-Mensaje([string]$Texto) {
 }
 
 # ---------- Inicio ----------
+$Canal = $null
+if ($CanalId -match 'channels/(\d+|@me)/(\d+)') { $ServidorId = $Matches[1]; $CanalId = $Matches[2] }
+if ($CanalId) {
+    if ($ServidorId -notmatch '^(\d+|@me)$' -or $CanalId -notmatch '^\d+$') {
+        Write-Host 'Falta el ID del servidor del canal (o no es valido).' -ForegroundColor Red
+        Write-Host 'En Discord: clic derecho en el canal > Copiar enlace del canal, y pegalo entero'
+        Write-Host 'en $CanalId, arriba de todo en auto-mensajes.ps1 (se abre con el Bloc de notas).'
+        exit 1
+    }
+    $Canal = "$ServidorId/$CanalId"
+}
+
 $Host.UI.RawUI.WindowTitle = 'Auto mensajes'
 [AutoMensajes.Ventanas]::NoSuspender()
 
@@ -174,7 +206,11 @@ foreach ($t in $tareas) {
     Write-Host ('  {0,-20} cada {1} min' -f $t.Texto, ($t.Cada / 60))
 }
 Write-Host ''
-Write-Host 'Deja abierto en Discord el canal donde se tienen que escribir.'
+if ($Canal) {
+    Write-Host "Canal: https://discord.com/channels/$Canal"
+} else {
+    Write-Host 'Deja abierto en Discord el canal donde se tienen que escribir.'
+}
 Write-Host 'La PC tiene que quedar desbloqueada. Para detenerlo, cerra esta ventana.'
 Write-Host ''
 
