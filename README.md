@@ -57,6 +57,15 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 La configuración y los saldos están en `data/valle.db` y el token en `.env`. Para actualizar, hacé doble clic en **`actualizar.bat`** en la misma carpeta: cierra el bot, respalda la base en `data/backups/`, baja la versión nueva de GitHub reemplazando **solo el código** (nunca `data/`, `.env` ni `node_modules/`) y abre `iniciar.bat`. La lógica está en `scripts/actualizar.mjs` (Node, sin dependencias). Se configura con `UPDATE_REPO` y `UPDATE_BRANCH` en el `.env`. Si el repo es **privado**, hace falta Git instalado (pide iniciar sesión en GitHub una vez) o un `GITHUB_TOKEN` de solo lectura.
 
+### Mensajes automáticos en tu cuenta (`auto-mensajes.bat`)
+
+Herramienta aparte del bot, solo para Windows: escribe y envía mensajes desde **tu** Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Trae la ventana de Discord al frente, escribe el mensaje como el teclado, aprieta Enter y te devuelve a la ventana que estabas usando. No usa token: el mensaje va al canal que esté abierto en Discord.
+
+- Hacé doble clic en **`auto-mensajes.bat`** con Discord abierto en el canal correcto. Para detenerlo, cerrá la ventana.
+- La PC tiene que quedar desbloqueada (mientras corre, no se suspende). No conviene usarlo mientras jugás en pantalla completa.
+- Los mensajes y los tiempos se cambian arriba de todo en `scripts/auto-mensajes.ps1`.
+- Automatizar una cuenta de usuario va contra los términos de Discord y muchos bots lo castigan: usalo bajo tu responsabilidad.
+
 ## 3. Base de datos y migraciones
 
 > 🔄 **Al actualizar el bot no hace falta borrar canales a mano.** Si una versión nueva cambia el diseño de los canales de registros o de voz temporal, al arrancar el bot los actualiza solo en cada servidor donde estaban configurados (renombra, mueve y corrige permisos, sin borrar nada) y deja un resumen en el canal de sistema. Lo que sobre de instalaciones viejas se borra con un botón desde `/setup` o `/voz`. Para que esto funcione con los datos, **no borres la carpeta `data/`** al actualizar.
