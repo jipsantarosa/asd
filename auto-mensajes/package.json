@@ -1,0 +1,8 @@
+{
+  "name": "auto-mensajes",
+  "private": true,
+  "description": "Mensajes automaticos en Discord desde tu cuenta, en una ventana aparte de Edge.",
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

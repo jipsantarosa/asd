@@ -57,13 +57,14 @@ Para desarrollo: poné `DEV_GUILD_ID` en `.env` (los comandos aparecen al instan
 
 La configuración y los saldos están en `data/valle.db` y el token en `.env`. Para actualizar, hacé doble clic en **`actualizar.bat`** en la misma carpeta: cierra el bot, respalda la base en `data/backups/`, baja la versión nueva de GitHub reemplazando **solo el código** (nunca `data/`, `.env` ni `node_modules/`) y abre `iniciar.bat`. La lógica está en `scripts/actualizar.mjs` (Node, sin dependencias). Se configura con `UPDATE_REPO` y `UPDATE_BRANCH` en el `.env`. Si el repo es **privado**, hace falta Git instalado (pide iniciar sesión en GitHub una vez) o un `GITHUB_TOKEN` de solo lectura.
 
-### Mensajes automáticos en tu cuenta (`auto-mensajes.bat`)
+### Mensajes automáticos en tu cuenta (`auto-mensajes/`)
 
-Herramienta aparte del bot, solo para Windows: escribe y envía mensajes desde **tu** Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Trae la ventana de Discord al frente, abre el canal configurado, escribe el mensaje como el teclado, aprieta Enter y te devuelve a la ventana que estabas usando. No usa token.
+Herramienta aparte del bot, para Windows: escribe y envía mensajes desde **tu** cuenta de Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Abre una ventana aparte de Microsoft Edge, con su propio perfil, en el canal configurado y escribe ahí. Esa ventana se puede minimizar: los mensajes salen igual aunque estés usando otra cosa o la PC esté bloqueada. No usa token.
 
-- Hacé doble clic en **`auto-mensajes.bat`** con Discord abierto en el canal correcto. Para detenerlo, cerrá la ventana.
-- La PC tiene que quedar desbloqueada (mientras corre, no se suspende). No conviene usarlo mientras jugás en pantalla completa.
-- Los mensajes, los tiempos y el canal se cambian arriba de todo en `scripts/auto-mensajes.ps1`. Para el canal: clic derecho en el canal → **Copiar enlace del canal** y pegalo en `$CanalId` (con la app de escritorio; en el navegador se usa el canal que esté abierto).
+- Hacé doble clic en **`auto-mensajes/auto-mensajes.bat`** (necesita Node.js; la primera vez instala lo necesario). La primera vez iniciá sesión en Discord en la ventana que se abre; después queda guardada.
+- Para detenerlo, cerrá la ventana negra. Mientras corre, la PC no se suspende.
+- Los mensajes, los tiempos y el canal se cambian arriba de todo en `auto-mensajes/auto-mensajes.mjs`. Para el canal: clic derecho en el canal → **Copiar enlace del canal**.
+- La sesión de esa ventana se guarda en `%LOCALAPPDATA%\auto-mensajes-discord`: no compartas esa carpeta. Borrarla cierra la sesión.
 - Automatizar una cuenta de usuario va contra los términos de Discord y muchos bots lo castigan: usalo bajo tu responsabilidad.
 
 ## 3. Base de datos y migraciones
