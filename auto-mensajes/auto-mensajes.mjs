@@ -4,12 +4,12 @@
 //   - "xfish 2"        5 segundos después de cada xmine
 //   - "xpet explore 2" cada 45 minutos
 //
-// Abre una ventana aparte de Microsoft Edge (con su propio perfil) en el canal y escribe
-// ahí como si fuera el teclado. Esa ventana se puede minimizar: los mensajes salen igual
-// aunque estés usando otra cosa o la PC esté bloqueada. No usa token: la primera vez
-// iniciás sesión en Discord en esa ventana y queda guardada.
+// Abre Discord en Microsoft Edge (con su propio perfil, aparte del tuyo) en el canal y
+// escribe ahí como si fuera el teclado. No usa token: la primera vez se abre una ventana
+// para que inicies sesión; después queda guardada y Discord sigue abierto sin ventana,
+// así que no hace falta tener nada a la vista (ni la PC desbloqueada).
 //
-// Para detenerlo, cerrá la ventana negra (o la de Discord).
+// Para detenerlo, cerrá la ventana negra.
 
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -35,8 +35,12 @@ const SEPARACION_MINIMA = 5;
 // Si un mensaje no se pudo enviar, se vuelve a intentar a los tantos segundos.
 const REINTENTO = 30;
 
-// Navegador para la ventana aparte: 'msedge' (viene con Windows) o 'chrome'.
+// Navegador: 'msedge' (viene con Windows) o 'chrome'.
 const NAVEGADOR = 'msedge';
+
+// true: después de iniciar sesión, Discord sigue abierto sin ventana.
+// false: queda la ventana de Discord a la vista (se puede minimizar, pero no cerrar).
+const SIN_VENTANA = true;
 // =============================================================
 
 // Perfil de esa ventana (tiene tu sesión de Discord): fuera de esta carpeta, para no compartirlo sin querer.
@@ -61,11 +65,14 @@ while ($true) { Start-Sleep 3600 }`;
   process.on('exit', () => hijo.kill());
 }
 
-async function abrirNavegador() {
+async function abrirNavegador(sinVentana) {
+  const opciones = sinVentana
+    ? { headless: true, viewport: { width: 1280, height: 800 } }
+    : { headless: false, viewport: null };
   let error;
   for (const channel of new Set([NAVEGADOR, 'msedge', 'chrome'])) {
     try {
-      return await chromium.launchPersistentContext(PERFIL, { channel, headless: false, viewport: null });
+      return await chromium.launchPersistentContext(PERFIL, { channel, ...opciones });
     } catch (e) {
       error = e;
     }
@@ -73,8 +80,57 @@ async function abrirNavegador() {
   throw new Error(`No pude abrir Microsoft Edge ni Google Chrome.\n${error?.message ?? ''}`);
 }
 
+// Discord pidió iniciar sesión estando sin ventana (ahí no se puede).
+class SinSesion extends Error {
+  constructor() {
+    super('Discord pide iniciar sesión otra vez. Si se repite, poné SIN_VENTANA = false en auto-mensajes.mjs.');
+  }
+}
+
 let contexto;
 let pagina;
+let oculto = false;
+
+async function abrir(sinVentana) {
+  const c = await abrirNavegador(sinVentana);
+  contexto = c;
+  pagina = null;
+  oculto = sinVentana;
+  c.on('close', () => {
+    if (contexto !== c) return; // la cerré yo para cambiar de modo
+    log('Se cerró Discord: me detengo.');
+    process.exit(0);
+  });
+}
+
+async function cerrar() {
+  const c = contexto;
+  contexto = null;
+  await c.close();
+}
+
+// Abre Discord en el canal. Si no hay sesión, muestra la ventana para iniciarla y después
+// (con SIN_VENTANA) la cierra y sigue sin ventana.
+async function conectar() {
+  if (SIN_VENTANA) {
+    await abrir(true);
+    try {
+      await esperarCanal();
+      return;
+    } catch (e) {
+      if (!(e instanceof SinSesion)) throw e;
+      await cerrar();
+    }
+  }
+  await abrir(false);
+  await esperarCanal();
+  if (SIN_VENTANA) {
+    log('Sesión iniciada: cierro la ventana y sigo sin ventana.');
+    await cerrar();
+    await abrir(true);
+    await esperarCanal();
+  }
+}
 
 async function obtenerPagina() {
   if (!pagina || pagina.isClosed()) pagina = contexto.pages()[0] ?? (await contexto.newPage());
@@ -91,6 +147,7 @@ async function esperarCanal() {
     if (await page.locator(CAJA).count()) return page;
     const url = page.url();
     if (/discord\.com\/(login|register)/.test(url)) {
+      if (oculto) throw new SinSesion();
       if (!avisoSesion) {
         log('Iniciá sesión en Discord en la ventana que se abrió (podés escanear el QR con el celular). Te espero.');
         avisoSesion = true;
@@ -140,15 +197,11 @@ async function main() {
   console.log(`Canal: ${CANAL}\n`);
 
   mantenerDespierta();
-  log('Abriendo la ventana de Discord...');
-  contexto = await abrirNavegador();
-  contexto.on('close', () => {
-    log('Se cerró la ventana de Discord: me detengo.');
-    process.exit(0);
-  });
-
-  await esperarCanal();
-  log('Listo. Podés minimizar la ventana de Discord, pero no la cierres.');
+  log('Abriendo Discord...');
+  await conectar();
+  log(oculto
+    ? 'Listo. Discord queda abierto sin ventana: no hace falta tener nada a la vista.'
+    : 'Listo. Podés minimizar la ventana de Discord, pero no la cierres.');
 
   const inicio = performance.now();
   const ahora = () => (performance.now() - inicio) / 1000;
@@ -167,7 +220,13 @@ async function main() {
     try {
       enviado = await enviar(t.texto);
     } catch (e) {
-      log(`Error al enviar "${t.texto}": ${e.message.split('\n')[0]}. Reintento en ${REINTENTO} s.`);
+      if (!(e instanceof SinSesion)) {
+        log(`Error al enviar "${t.texto}": ${e.message.split('\n')[0]}. Reintento en ${REINTENTO} s.`);
+      } else {
+        log('Discord cerró la sesión: abro la ventana para que vuelvas a iniciarla.');
+        await cerrar();
+        await conectar();
+      }
     }
 
     // Cada mensaje vuelve a tocar recién cuando pasa su tiempo completo desde que se mandó.

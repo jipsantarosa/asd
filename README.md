@@ -59,10 +59,10 @@ La configuración y los saldos están en `data/valle.db` y el token en `.env`. P
 
 ### Mensajes automáticos en tu cuenta (`auto-mensajes/`)
 
-Herramienta aparte del bot, para Windows: escribe y envía mensajes desde **tu** cuenta de Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Abre una ventana aparte de Microsoft Edge, con su propio perfil, en el canal configurado y escribe ahí. Esa ventana se puede minimizar: los mensajes salen igual aunque estés usando otra cosa o la PC esté bloqueada. No usa token.
+Herramienta aparte del bot, para Windows: escribe y envía mensajes desde **tu** cuenta de Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Abre Discord en Microsoft Edge, con su propio perfil, en el canal configurado y escribe ahí. Después del primer inicio de sesión sigue **sin ventana**: no hace falta tener nada a la vista, y los mensajes salen aunque estés usando otra cosa o la PC esté bloqueada. No usa token.
 
-- Hacé doble clic en **`auto-mensajes/auto-mensajes.bat`** (necesita Node.js; la primera vez instala lo necesario). La primera vez iniciá sesión en Discord en la ventana que se abre; después queda guardada.
-- Para detenerlo, cerrá la ventana negra. Mientras corre, la PC no se suspende.
+- Hacé doble clic en **`auto-mensajes/auto-mensajes.bat`** (necesita Node.js; la primera vez instala lo necesario). La primera vez iniciá sesión en Discord en la ventana que se abre: después se cierra sola y la sesión queda guardada. Si Discord cierra la sesión, la ventana vuelve a aparecer.
+- Para detenerlo, cerrá la ventana negra. Mientras corre, la PC no se suspende (tiene que quedar prendida). Con `SIN_VENTANA = false` la ventana de Discord queda a la vista.
 - Los mensajes, los tiempos y el canal se cambian arriba de todo en `auto-mensajes/auto-mensajes.mjs`. Para el canal: clic derecho en el canal → **Copiar enlace del canal**.
 - La sesión de esa ventana se guarda en `%LOCALAPPDATA%\auto-mensajes-discord`: no compartas esa carpeta. Borrarla cierra la sesión.
 - Automatizar una cuenta de usuario va contra los términos de Discord y muchos bots lo castigan: usalo bajo tu responsabilidad.
