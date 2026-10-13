@@ -1,6 +1,6 @@
 // Mensajes automáticos en Discord, desde tu cuenta y sin tocar tus ventanas (lo usa auto-mensajes.bat).
 //
-//   - "xmine 2"        cada 4 minutos
+//   - "xmine 2"        cada 5 minutos (la espera de Nekotina)
 //   - "xfish 2"        5 segundos después de cada xmine
 //   - "xpet explore 2" cada 45 minutos
 //
@@ -24,8 +24,8 @@ const CANAL = 'https://discord.com/channels/1536949928872378438/1543948984886763
 // texto: lo que se escribe. cadaMinutos: cada cuánto se repite.
 // primeraVez: a los cuántos segundos de arrancar se manda la primera vez.
 const MENSAJES = [
-  { texto: 'xmine 2', cadaMinutos: 4, primeraVez: 0 },
-  { texto: 'xfish 2', cadaMinutos: 4, primeraVez: 5 },
+  { texto: 'xmine 2', cadaMinutos: 5, primeraVez: 0 },
+  { texto: 'xfish 2', cadaMinutos: 5, primeraVez: 5 },
   { texto: 'xpet explore 2', cadaMinutos: 45, primeraVez: 10 },
 ];
 
@@ -34,6 +34,9 @@ const SEPARACION_MINIMA = 5;
 
 // Si un mensaje no se pudo enviar, se vuelve a intentar a los tantos segundos.
 const REINTENTO = 30;
+
+// Segundos de más sobre cadaMinutos, para no llegar justo antes de que termine la espera del bot.
+const MARGEN = 10;
 
 // Navegador: 'msedge' (viene con Windows) o 'chrome'.
 const NAVEGADOR = 'msedge';
@@ -231,7 +234,7 @@ async function main() {
 
     // Cada mensaje vuelve a tocar recién cuando pasa su tiempo completo desde que se mandó.
     ultimoEnvio = ahora();
-    t.proximo = ultimoEnvio + (enviado ? t.cada : Math.min(REINTENTO, t.cada));
+    t.proximo = ultimoEnvio + (enviado ? t.cada + MARGEN : Math.min(REINTENTO, t.cada));
   }
 }
 
