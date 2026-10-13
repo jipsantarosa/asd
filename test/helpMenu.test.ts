@@ -41,3 +41,23 @@ describe('!help', () => {
     assert.deepEqual(usageOf(findHelpCommand('warn')!, '!'), ['!warn @usuario [motivo]']);
   });
 });
+
+describe('/servidores', () => {
+  it('cuenta jugadores del casino por servidor (total y última semana) y guarda el canal de avisos', async () => {
+    const { casinoPlayersByGuild, getNotifyChannel, setNotifyChannel } = await import('../src/discord/commands/botGuilds');
+    const w = makeWorld();
+    const now = w.clock.t;
+    const add = (u: string, g: string, seen: number) => w.ctx.db.run('INSERT INTO casino_user_guilds (user_id, guild_id, last_seen) VALUES (?, ?, ?)', u, g, seen);
+    add('200000000000000011', G, now);
+    add('200000000000000012', G, now - 30 * 86_400_000);
+    add('200000000000000011', '100000000000000099', now);
+    const m = casinoPlayersByGuild(w.ctx, now);
+    assert.deepEqual(m.get(G), { total: 2, week: 1 });
+    assert.deepEqual(m.get('100000000000000099'), { total: 1, week: 1 });
+    assert.equal(getNotifyChannel(w.ctx), null);
+    setNotifyChannel(w.ctx, '300000000000000001');
+    assert.equal(getNotifyChannel(w.ctx), '300000000000000001');
+    setNotifyChannel(w.ctx, null);
+    assert.equal(getNotifyChannel(w.ctx), null);
+  });
+});

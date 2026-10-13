@@ -24,6 +24,7 @@ import { startServerTools } from './discord/commands/serverTools';
 import { startAutoRole } from './discord/commands/autoRole';
 import { startPremiumRoles } from './discord/commands/premiumRoles';
 import { startShop } from './discord/commands/shop';
+import { startGuildNotices } from './discord/commands/botGuilds';
 import path from 'node:path';
 import { acquireInstanceLock } from './instanceLock';
 
@@ -90,6 +91,8 @@ async function main(): Promise<void> {
   const premiumRoles = startPremiumRoles(app);
   // Tienda: si borran a mano el canal de un ticket, queda cerrado.
   startShop(app);
+  // Avisos cuando agregan o sacan el bot de un servidor (/servidores avisos).
+  startGuildNotices(app);
   client.on(Events.Error, (e) => logger.error('Error del cliente:', e));
 
   // Un canal borrado deja de figurar en los ajustes del casino.

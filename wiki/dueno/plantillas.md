@@ -93,3 +93,8 @@ No se copian mensajes, miembros ni permisos de personas puntuales; tampoco los r
 * Variables en los mensajes: `{server}`, `{bot}`, `{invite}` (enlace para invitar al bot), `{prefix}`, `{user}`, `{#canal}` y `{@&rol}`.
 
 Si el archivo tiene un error, el bot dice exactamente dónde (por ejemplo *"categoría 2 › Info › type"*).
+
+## /servidores: dónde está tu bot
+
+* `/servidores lista` — todos los servidores donde está el bot, ordenados por miembros: cuántos miembros tiene cada uno, cuánta gente usó el casino ahí (total y en la última semana) y cuándo lo agregaron. El menú abre el detalle (ID, dueño, boosts, canales, idioma) con un botón para **sacar el bot** de ese servidor (pide confirmación).
+* `/servidores avisos #canal` — el bot avisa en ese canal cada vez que lo agregan o lo sacan de un servidor. Sin canal, se desactiva.

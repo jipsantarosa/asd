@@ -32,6 +32,7 @@ import { stealHandler } from '../commands/steal';
 import { maintenanceHandler } from '../setupMaintenance';
 import { marryHandler } from '../commands/social';
 import { shopHandler } from '../commands/shop';
+import { botGuildsHandler } from '../commands/botGuilds';
 import { templateHandler } from '../commands/serverTemplates';
 import { deferPanel, field, update, values, type Handler as UiHandler, type Ix } from './util';
 import { voiceAdminHandler, voiceHandler } from './voice';
@@ -447,6 +448,7 @@ export const HANDLERS: Record<string, Handler> = {
   mr: marryHandler,
   hm: helpMenuHandler,
   sh: shopHandler,
+  bg: botGuildsHandler,
   tp: templateHandler,
   ...CASINO_HANDLERS,
 };

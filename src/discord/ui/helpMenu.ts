@@ -31,7 +31,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
   { id: 'voz', name: 'Voz', emoji: '🔊', blurb: 'Canales de voz temporales.', commands: ['canal', 'voz'] },
   { id: 'moderacion', name: 'Moderación', emoji: '🛡️', blurb: 'Sanciones, casos, automod y limpieza.', commands: ['mod', 'warn', 'timeout', 'untimeout', 'kick', 'ban', 'unban', 'modlogs', 'caso', 'purgar', 'automod'] },
   { id: 'config', name: 'Configuración', emoji: '⚙️', blurb: 'Ajustes del servidor y del bot.', commands: ['ayuda', 'prefijo', 'setlang', 'ajustes', 'setup', 'roles', 'autorol', 'rolespremium', 'boosttracker', 'anti-webhooks'] },
-  { id: 'dueno', name: 'Dueño del bot', emoji: '👑', blurb: 'Solo para el dueño del bot.', commands: ['setupdiscord', 'plantilla'] },
+  { id: 'dueno', name: 'Dueño del bot', emoji: '👑', blurb: 'Solo para el dueño del bot.', commands: ['setupdiscord', 'plantilla', 'servidores'] },
 ];
 
 /** Descripción de los comandos que solo existen por prefijo (no tienen comando de barra). */
