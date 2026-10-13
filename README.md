@@ -59,7 +59,7 @@ La configuración y los saldos están en `data/valle.db` y el token en `.env`. P
 
 ### Mensajes automáticos en tu cuenta (`auto-mensajes/`)
 
-Herramienta aparte del bot, para Windows: escribe y envía mensajes desde **tu** cuenta de Discord cada cierto tiempo (`xmine 2` cada 2 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Abre Discord en Microsoft Edge, con su propio perfil, en el canal configurado y escribe ahí. Después del primer inicio de sesión sigue **sin ventana**: no hace falta tener nada a la vista, y los mensajes salen aunque estés usando otra cosa o la PC esté bloqueada. No usa token.
+Herramienta aparte del bot, para Windows: escribe y envía mensajes desde **tu** cuenta de Discord cada cierto tiempo (`xmine 2` cada 4 minutos, `xfish 2` 5 segundos después y `xpet explore 2` cada 45 minutos). Abre Discord en Microsoft Edge, con su propio perfil, en el canal configurado y escribe ahí. Después del primer inicio de sesión sigue **sin ventana**: no hace falta tener nada a la vista, y los mensajes salen aunque estés usando otra cosa o la PC esté bloqueada. No usa token.
 
 - Hacé doble clic en **`auto-mensajes/auto-mensajes.bat`** (necesita Node.js; la primera vez instala lo necesario). La primera vez iniciá sesión en Discord en la ventana que se abre: después se cierra sola y la sesión queda guardada. Si Discord cierra la sesión, la ventana vuelve a aparecer.
 - Para detenerlo, cerrá la ventana negra. Mientras corre, la PC no se suspende (tiene que quedar prendida). Con `SIN_VENTANA = false` la ventana de Discord queda a la vista.

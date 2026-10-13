@@ -1,6 +1,6 @@
 // Mensajes automáticos en Discord, desde tu cuenta y sin tocar tus ventanas (lo usa auto-mensajes.bat).
 //
-//   - "xmine 2"        cada 2 minutos
+//   - "xmine 2"        cada 4 minutos
 //   - "xfish 2"        5 segundos después de cada xmine
 //   - "xpet explore 2" cada 45 minutos
 //
@@ -24,8 +24,8 @@ const CANAL = 'https://discord.com/channels/1536949928872378438/1543948984886763
 // texto: lo que se escribe. cadaMinutos: cada cuánto se repite.
 // primeraVez: a los cuántos segundos de arrancar se manda la primera vez.
 const MENSAJES = [
-  { texto: 'xmine 2', cadaMinutos: 2, primeraVez: 0 },
-  { texto: 'xfish 2', cadaMinutos: 2, primeraVez: 5 },
+  { texto: 'xmine 2', cadaMinutos: 4, primeraVez: 0 },
+  { texto: 'xfish 2', cadaMinutos: 4, primeraVez: 5 },
   { texto: 'xpet explore 2', cadaMinutos: 45, primeraVez: 10 },
 ];
 
