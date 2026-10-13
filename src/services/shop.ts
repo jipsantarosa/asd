@@ -10,6 +10,10 @@ export interface ShopConfig {
   categoryId: string | null;
   staffRoleId: string | null;
   logChannelId: string | null;
+  /** Canal donde se publica cada venta (proofs). */
+  proofChannelId: string | null;
+  /** Los proofs no muestran quién compró. */
+  proofHideBuyer: boolean;
 }
 
 export interface Product {
@@ -38,9 +42,20 @@ export interface Ticket {
   status: 'open' | 'closed';
   sold: boolean;
   createdAt: number;
+  soldAt: number | null;
+  soldBy: string | null;
+  /** Número de venta (proof), por servidor. */
+  proofNumber: number | null;
+  proofProduct: string | null;
+  proofPrice: string | null;
+  proofImage: string | null;
+  proofChannelId: string | null;
+  proofMessageId: string | null;
+  rating: number | null;
+  review: string | null;
 }
 
-export const SHOP_LIMITS = { products: 25, title: 120, description: 2000, price: 20, button: 40, image: 500, openPerUser: 3 } as const;
+export const SHOP_LIMITS = { products: 25, title: 120, description: 2000, price: 20, button: 40, image: 500, openPerUser: 3, review: 300 } as const;
 
 export const PRODUCT_DEFAULTS = {
   title: 'Nombre del producto',
@@ -52,20 +67,24 @@ export const PRODUCT_DEFAULTS = {
 // ───────────────────────── configuración ─────────────────────────
 
 export function getShopConfig(ctx: GameContext, guildId: string): ShopConfig {
-  const r = ctx.db.get<{ category_id: string | null; staff_role_id: string | null; log_channel_id: string | null }>(
-    'SELECT category_id, staff_role_id, log_channel_id FROM shop_config WHERE guild_id = ?', guildId,
+  const r = ctx.db.get<{ category_id: string | null; staff_role_id: string | null; log_channel_id: string | null; proof_channel_id: string | null; proof_hide_buyer: number }>(
+    'SELECT category_id, staff_role_id, log_channel_id, proof_channel_id, proof_hide_buyer FROM shop_config WHERE guild_id = ?', guildId,
   );
-  return { categoryId: r?.category_id ?? null, staffRoleId: r?.staff_role_id ?? null, logChannelId: r?.log_channel_id ?? null };
+  return {
+    categoryId: r?.category_id ?? null, staffRoleId: r?.staff_role_id ?? null, logChannelId: r?.log_channel_id ?? null,
+    proofChannelId: r?.proof_channel_id ?? null, proofHideBuyer: r?.proof_hide_buyer === 1,
+  };
 }
 
 export function saveShopConfig(ctx: GameContext, guildId: string, patch: Partial<ShopConfig>): ShopConfig {
   const next = { ...getShopConfig(ctx, guildId), ...patch };
-  for (const id of [next.categoryId, next.staffRoleId, next.logChannelId]) if (id !== null && !/^\d{17,20}$/.test(id)) throw new GameError('ID inválido.');
+  for (const id of [next.categoryId, next.staffRoleId, next.logChannelId, next.proofChannelId]) if (id !== null && !/^\d{17,20}$/.test(id)) throw new GameError('ID inválido.');
   ctx.db.run(
-    `INSERT INTO shop_config (guild_id, category_id, staff_role_id, log_channel_id, updated_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO shop_config (guild_id, category_id, staff_role_id, log_channel_id, proof_channel_id, proof_hide_buyer, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (guild_id) DO UPDATE SET category_id = excluded.category_id, staff_role_id = excluded.staff_role_id,
-       log_channel_id = excluded.log_channel_id, updated_at = excluded.updated_at`,
-    guildId, next.categoryId, next.staffRoleId, next.logChannelId, ctx.now(),
+       log_channel_id = excluded.log_channel_id, proof_channel_id = excluded.proof_channel_id, proof_hide_buyer = excluded.proof_hide_buyer,
+       updated_at = excluded.updated_at`,
+    guildId, next.categoryId, next.staffRoleId, next.logChannelId, next.proofChannelId, next.proofHideBuyer ? 1 : 0, ctx.now(),
   );
   return next;
 }
@@ -169,12 +188,16 @@ export function consumeStock(ctx: GameContext, guildId: string, id: number): Pro
 
 interface TicketRow {
   id: number; guild_id: string; number: number; product_id: number | null; user_id: string; channel_id: string | null;
-  status: 'open' | 'closed'; sold: number; created_at: number;
+  status: 'open' | 'closed'; sold: number; created_at: number; sold_at: number | null; sold_by: string | null;
+  proof_number: number | null; proof_product: string | null; proof_price: string | null; proof_image: string | null;
+  proof_channel_id: string | null; proof_message_id: string | null; rating: number | null; review: string | null;
 }
 
 const toTicket = (r: TicketRow): Ticket => ({
   id: r.id, guildId: r.guild_id, number: r.number, productId: r.product_id, userId: r.user_id, channelId: r.channel_id,
-  status: r.status, sold: r.sold === 1, createdAt: r.created_at,
+  status: r.status, sold: r.sold === 1, createdAt: r.created_at, soldAt: r.sold_at, soldBy: r.sold_by,
+  proofNumber: r.proof_number, proofProduct: r.proof_product, proofPrice: r.proof_price, proofImage: r.proof_image,
+  proofChannelId: r.proof_channel_id, proofMessageId: r.proof_message_id, rating: r.rating, review: r.review,
 });
 
 export function openTicketsOf(ctx: GameContext, guildId: string, userId: string): Ticket[] {
@@ -222,8 +245,17 @@ export function dropTicket(ctx: GameContext, ticketId: number): void {
   ctx.db.run("DELETE FROM shop_tickets WHERE id = ? AND channel_id IS NULL AND status = 'open'", ticketId);
 }
 
-/** Marca la venta (una sola vez por ticket) y descuenta el stock. */
-export function markSold(ctx: GameContext, guildId: string, ticketId: number): { ticket: Ticket; product: Product | null } {
+/** Precio del producto como se muestra en el proof ("ARS$399 · $1 USD"). */
+export function priceLabel(p: Pick<Product, 'priceArs' | 'priceUsd'>): string | null {
+  const parts = [p.priceArs ? `ARS$${p.priceArs}` : '', p.priceUsd ? `$${p.priceUsd} USD` : ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/**
+ * Marca la venta (una sola vez por ticket), descuenta el stock y le da su número de proof. Guarda una copia del
+ * producto (nombre, precio, imagen) para que el proof siga igual aunque después se edite o se borre el producto.
+ */
+export function markSold(ctx: GameContext, guildId: string, ticketId: number, by: string | null = null): { ticket: Ticket; product: Product | null } {
   return ctx.db.transaction(() => {
     const t = getTicket(ctx, guildId, ticketId);
     if (t.sold) throw new GameError('Este ticket ya está marcado como vendido.');
@@ -236,9 +268,38 @@ export function markSold(ctx: GameContext, guildId: string, ticketId: number): {
         if (err instanceof GameError && /stock/.test(err.message)) throw err;
       }
     }
-    ctx.db.run('UPDATE shop_tickets SET sold = 1 WHERE id = ?', ticketId);
+    ctx.db.run(`INSERT INTO shop_config (guild_id, proof_counter, updated_at) VALUES (?, 1, ?)
+                ON CONFLICT (guild_id) DO UPDATE SET proof_counter = proof_counter + 1`, guildId, ctx.now());
+    const proof = ctx.db.get<{ n: number }>('SELECT proof_counter AS n FROM shop_config WHERE guild_id = ?', guildId)!.n;
+    ctx.db.run('UPDATE shop_tickets SET sold = 1, sold_at = ?, sold_by = ?, proof_number = ?, proof_product = ?, proof_price = ?, proof_image = ? WHERE id = ?',
+      ctx.now(), by, proof, product?.title ?? null, product ? priceLabel(product) : null, product?.imageUrl ?? null, ticketId);
     return { ticket: getTicket(ctx, guildId, ticketId), product };
   });
+}
+
+export function setProofMessage(ctx: GameContext, ticketId: number, channelId: string | null, messageId: string | null): void {
+  ctx.db.run('UPDATE shop_tickets SET proof_channel_id = ?, proof_message_id = ? WHERE id = ?', channelId, messageId, ticketId);
+}
+
+/** Reseña de quien compró: una sola vez, de 1 a 5 estrellas, con comentario opcional. */
+export function saveReview(ctx: GameContext, guildId: string, ticketId: number, userId: string, rawRating: string, rawText: string): Ticket {
+  const t = getTicket(ctx, guildId, ticketId);
+  if (t.userId !== userId) throw new GameError('Solo quien compró puede dejar la reseña.');
+  if (!t.sold) throw new GameError('La reseña se deja después de la venta.');
+  if (t.rating !== null) throw new GameError('Ya dejaste tu reseña. ¡Gracias!');
+  const stars = (rawRating.match(/⭐/g)?.length ?? 0) || Number(rawRating.trim());
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new GameError('La puntuación tiene que ser un número del 1 al 5.');
+  const text = rawText.replace(/@(everyone|here)/g, '@\u200b$1').trim().slice(0, SHOP_LIMITS.review);
+  ctx.db.run('UPDATE shop_tickets SET rating = ?, review = ? WHERE id = ? AND rating IS NULL', stars, text || null, ticketId);
+  return getTicket(ctx, guildId, ticketId);
+}
+
+/** Ventas y promedio de reseñas del servidor. */
+export function proofStats(ctx: GameContext, guildId: string): { sales: number; reviews: number; average: number | null } {
+  const r = ctx.db.get<{ sales: number; reviews: number; avg: number | null }>(
+    'SELECT SUM(sold) AS sales, COUNT(rating) AS reviews, AVG(rating) AS avg FROM shop_tickets WHERE guild_id = ?', guildId,
+  );
+  return { sales: r?.sales ?? 0, reviews: r?.reviews ?? 0, average: r?.avg != null ? Math.round(r.avg * 10) / 10 : null };
 }
 
 export function closeTicket(ctx: GameContext, ticketId: number, by: string | null): boolean {

@@ -1187,6 +1187,26 @@ CREATE INDEX ix_shop_tickets_open ON shop_tickets (guild_id, user_id, status);
 CREATE UNIQUE INDEX ux_shop_tickets_channel ON shop_tickets (channel_id) WHERE channel_id IS NOT NULL;
 `,
   },
+  {
+    id: 20,
+    name: 'tienda_proofs',
+    sql: `
+-- Proofs automáticos: cada venta se publica numerada en un canal, con reseña opcional de quien compró.
+ALTER TABLE shop_config ADD COLUMN proof_channel_id TEXT;
+ALTER TABLE shop_config ADD COLUMN proof_hide_buyer INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shop_config ADD COLUMN proof_counter INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shop_tickets ADD COLUMN sold_at INTEGER;
+ALTER TABLE shop_tickets ADD COLUMN sold_by TEXT;
+ALTER TABLE shop_tickets ADD COLUMN proof_number INTEGER;
+ALTER TABLE shop_tickets ADD COLUMN proof_product TEXT;
+ALTER TABLE shop_tickets ADD COLUMN proof_price TEXT;
+ALTER TABLE shop_tickets ADD COLUMN proof_image TEXT;
+ALTER TABLE shop_tickets ADD COLUMN proof_channel_id TEXT;
+ALTER TABLE shop_tickets ADD COLUMN proof_message_id TEXT;
+ALTER TABLE shop_tickets ADD COLUMN rating INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5);
+ALTER TABLE shop_tickets ADD COLUMN review TEXT;
+`,
+  },
 ];
 
 export function runMigrations(db: Db, now: number = Date.now()): number[] {

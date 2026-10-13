@@ -24,6 +24,16 @@ En cada ticket hay dos botones:
 * **✅ Marcar vendido** (solo staff): registra la venta y baja 1 el stock. Con stock 0 el botón del producto pasa a **Agotado**.
 * **🔒 Cerrar ticket** (quien compró o el staff): pide confirmación, guarda la transcripción en el registro y borra el canal.
 
+## Proofs automáticos
+
+En **🎫 Tickets** elegí un **canal de proofs**. Cada vez que el staff toca **✅ Marcar vendido**, el bot publica ahí un proof numerado (**Venta #0001**, #0002…) con:
+
+* el producto y el precio (se guarda una copia: el proof no cambia aunque después edites o borres el producto),
+* quién compró (o **Anónimo**, si activás **👤 Ocultar comprador en proofs**),
+* quién atendió y la fecha.
+
+En el ticket aparece el botón **⭐ Dejar reseña**: quien compró pone de 1 a 5 estrellas y un comentario opcional, y el proof se actualiza solo con la reseña. Una reseña por venta. En `/tienda` se ve el promedio de estrellas.
+
 Cada persona puede tener hasta **3 tickets abiertos**, y uno solo por producto (si toca **Comprar** otra vez, el bot le muestra el que ya tiene).
 
 {% hint style="warning" %}

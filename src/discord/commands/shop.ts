@@ -7,8 +7,8 @@ import {
 import { logger } from '../../logger';
 import { GameError } from '../../services/context';
 import {
-  closeTicket, createProduct, deleteProduct, dropTicket, getProduct, getShopConfig, getTicket, listProducts, markSold, reserveTicket,
-  saveShopConfig, setProductMessage, setTicketChannel, shopStats, ticketByChannel, updateProductPrice, updateProductTexts,
+  closeTicket, createProduct, deleteProduct, dropTicket, getProduct, getShopConfig, getTicket, listProducts, markSold, proofStats, reserveTicket,
+  saveReview, saveShopConfig, setProductMessage, setProofMessage, setTicketChannel, shopStats, ticketByChannel, updateProductPrice, updateProductTexts,
   type Product, type Ticket,
 } from '../../services/shop';
 import { row, type App, type Panel } from '../app';
@@ -76,7 +76,8 @@ function homePanel(app: App, guild: Guild, owner: string, notice?: string): Pane
       : 'Todavía no hay productos. Tocá **➕ Nuevo producto**.',
     '',
     `🎫 **Tickets:** categoría ${cfg.categoryId ? `<#${cfg.categoryId}>` : '*(ninguna)*'} · staff ${cfg.staffRoleId ? `<@&${cfg.staffRoleId}>` : '*(sin rol)*'} · registro ${cfg.logChannelId ? `<#${cfg.logChannelId}>` : '*(ninguno)*'}`,
-    `-# ${st.open} abiertos · ${st.sold} ventas · ${st.total} tickets en total`,
+    `🧾 **Proofs:** ${cfg.proofChannelId ? `<#${cfg.proofChannelId}>` : '*(sin canal: las ventas no se publican)*'}`,
+    `-# ${st.open} abiertos · ${st.sold} ventas · ${st.total} tickets en total${(() => { const ps = proofStats(app.ctx, guild.id); return ps.average !== null ? ` · ⭐ ${ps.average} (${ps.reviews} reseñas)` : ''; })()}`,
   ].filter((l, i) => l || i > 0).join('\n'));
   const rows = [];
   if (products.length) {
@@ -120,6 +121,8 @@ function ticketConfigPanel(app: App, guild: Guild, owner: string, notice?: strin
     `**Categoría** donde se crean: ${cfg.categoryId ? `<#${cfg.categoryId}>` : '*ninguna (arriba de todo)*'}`,
     `**Rol del staff** que atiende: ${cfg.staffRoleId ? `<@&${cfg.staffRoleId}>` : '*ninguno (solo admins)*'}`,
     `**Canal de registro** (ventas y transcripciones): ${cfg.logChannelId ? `<#${cfg.logChannelId}>` : '*ninguno*'}`,
+    `**Canal de proofs** (cada venta se publica sola): ${cfg.proofChannelId ? `<#${cfg.proofChannelId}>` : '*ninguno*'}`,
+    `**Comprador en los proofs:** ${cfg.proofHideBuyer ? 'oculto' : 'visible (mención sin notificar)'}`,
     '',
     '-# Cada ticket es un canal privado entre quien compra y el staff. Máximo 3 abiertos por persona.',
   ].filter((l, i) => l || i > 0).join('\n'));
@@ -129,7 +132,11 @@ function ticketConfigPanel(app: App, guild: Guild, owner: string, notice?: strin
       row(new ChannelSelectMenuBuilder().setCustomId(cid('sh', 'tcat', owner)).setPlaceholder('Categoría de los tickets…').setChannelTypes(ChannelType.GuildCategory)),
       row(new RoleSelectMenuBuilder().setCustomId(cid('sh', 'trole', owner)).setPlaceholder('Rol del staff…')),
       row(new ChannelSelectMenuBuilder().setCustomId(cid('sh', 'tlog', owner)).setPlaceholder('Canal de registro…').setChannelTypes(ChannelType.GuildText)),
-      row(new ButtonBuilder().setCustomId(cid('sh', 'home', owner)).setLabel('Volver').setEmoji('⬅️').setStyle(ButtonStyle.Secondary)),
+      row(new ChannelSelectMenuBuilder().setCustomId(cid('sh', 'tproof', owner)).setPlaceholder('Canal de proofs…').setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
+      row(
+        new ButtonBuilder().setCustomId(cid('sh', 'tanon', owner)).setLabel(cfg.proofHideBuyer ? 'Mostrar comprador en proofs' : 'Ocultar comprador en proofs').setEmoji('👤').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(cid('sh', 'home', owner)).setLabel('Volver').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+      ),
     ],
   };
 }
@@ -251,6 +258,55 @@ async function transcript(channel: GuildTextBasedChannel): Promise<AttachmentBui
   return new AttachmentBuilder(Buffer.from(lines.join('\n'), 'utf8'), { name: `${channel.name}.txt` });
 }
 
+// ───────────────────────── proofs ─────────────────────────
+
+const stars = (n: number) => '⭐'.repeat(n) + '☆'.repeat(5 - n);
+
+export function proofEmbed(guild: Guild, t: Ticket, hideBuyer: boolean): EmbedBuilder {
+  const e = new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setAuthor({ name: guild.name, iconURL: guild.iconURL({ size: 64 }) ?? undefined })
+    .setTitle(`✅ Venta #${String(t.proofNumber ?? 0).padStart(4, '0')} confirmada`)
+    .addFields(
+      { name: '🛒 Producto', value: clean(t.proofProduct ?? 'Producto'), inline: true },
+      ...(t.proofPrice ? [{ name: '💰 Precio', value: clean(t.proofPrice), inline: true }] : []),
+      { name: '👤 Comprador', value: hideBuyer ? 'Anónimo' : `<@${t.userId}>`, inline: true },
+      ...(t.soldBy ? [{ name: '🧑‍💼 Atendido por', value: `<@${t.soldBy}>`, inline: true }] : []),
+      { name: '📅 Fecha', value: `<t:${Math.floor((t.soldAt ?? Date.now()) / 1000)}:f>`, inline: true },
+      { name: '⭐ Reseña', value: t.rating ? `${stars(t.rating)}${t.review ? `\n> ${clean(t.review).replace(/\n/g, '\n> ')}` : ''}` : '*Esperando la reseña de quien compró…*' },
+    )
+    .setFooter({ text: 'Proof automático · registrado por el bot al confirmar la venta' });
+  if (t.proofImage) e.setThumbnail(t.proofImage);
+  return e;
+}
+
+/** Publica el proof de una venta en el canal configurado (si hay). */
+async function postProof(app: App, guild: Guild, t: Ticket): Promise<boolean> {
+  const cfg = getShopConfig(app.ctx, guild.id);
+  const ch = cfg.proofChannelId ? guild.channels.cache.get(cfg.proofChannelId) : null;
+  if (!ch?.isTextBased() || !('send' in ch)) return false;
+  const msg = await (ch as GuildTextBasedChannel).send({ embeds: [proofEmbed(guild, t, cfg.proofHideBuyer)], allowedMentions: { parse: [] } }).catch(() => null);
+  if (!msg) return false;
+  setProofMessage(app.ctx, t.id, msg.channelId, msg.id);
+  return true;
+}
+
+async function refreshProof(app: App, guild: Guild, t: Ticket): Promise<void> {
+  if (!t.proofChannelId || !t.proofMessageId) return;
+  const ch = guild.channels.cache.get(t.proofChannelId);
+  if (!ch?.isTextBased()) return;
+  await ch.messages.edit(t.proofMessageId, { embeds: [proofEmbed(guild, t, getShopConfig(app.ctx, guild.id).proofHideBuyer)], allowedMentions: { parse: [] } }).catch(() => undefined);
+}
+
+function reviewModal(t: Ticket, owner: string): ModalBuilder {
+  return new ModalBuilder().setCustomId(cid('sh', 'revsave', owner, t.id)).setTitle('Tu reseña').addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('rating').setLabel('Puntuación (1 a 5)').setStyle(TextInputStyle.Short)
+      .setRequired(true).setMinLength(1).setMaxLength(1).setPlaceholder('5')),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('text').setLabel('Comentario (opcional)').setStyle(TextInputStyle.Paragraph)
+      .setRequired(false).setMaxLength(300).setPlaceholder('¿Cómo fue tu compra?')),
+  );
+}
+
 // ───────────────────────── botones ─────────────────────────
 
 export const shopHandler: Handler = async (app, i, id) => {
@@ -260,15 +316,40 @@ export const shopHandler: Handler = async (app, i, id) => {
 
   // Botones públicos: comprar, cerrar y marcar vendido.
   if (id.act === 'buy') return openTicket(app, i, num(id.args[0]));
+  if (id.act === 'rev') {
+    if (!i.isButton()) throw new GameError('Acción desconocida.');
+    const t = getTicket(ctx, g.id, num(id.args[0]));
+    if (t.userId !== i.user.id) throw new GameError('Solo quien compró puede dejar la reseña.');
+    if (t.rating !== null) throw new GameError('Ya dejaste tu reseña. ¡Gracias!');
+    return i.showModal(reviewModal(t, i.user.id));
+  }
+  if (id.act === 'revsave') {
+    const t = saveReview(ctx, g.id, num(id.args[0]), i.user.id, field(i, 'rating'), field(i, 'text'));
+    await refreshProof(app, g, t);
+    await i.reply({ content: `⭐ ¡Gracias por tu reseña! (${stars(t.rating!)})`, flags: MessageFlags.Ephemeral });
+    // El botón de reseña ya no hace falta.
+    if (i.isModalSubmit() && i.isFromMessage()) await i.message.edit({ components: [] }).catch(() => undefined);
+    await logShop(app, g, new EmbedBuilder().setColor(0xf1c40f).setDescription(`⭐ <@${t.userId}> dejó ${t.rating}/5 en la venta **#${t.proofNumber}**${t.review ? `: ${clean(t.review).slice(0, 200)}` : '.'}`));
+    return;
+  }
   if (id.act === 'close' || id.act === 'closeok' || id.act === 'sold') {
     if (!i.isButton()) throw new GameError('Acción desconocida.');
     const t = getTicket(ctx, g.id, num(id.args[0]));
     const staff = isStaff(app, i.member);
     if (id.act === 'sold') {
       if (!staff) throw new GameError('Solo el staff puede marcar la venta.');
-      const { product } = markSold(ctx, g.id, t.id);
+      const { ticket: sold, product } = markSold(ctx, g.id, t.id, i.user.id);
       if (product) await refreshPublished(app, g, product);
-      await i.reply({ content: `✅ Venta registrada por <@${i.user.id}>.${product?.stock !== null && product ? ` Stock restante: **${product.stock}**.` : ''}`, allowedMentions: { parse: [] } });
+      const posted = await postProof(app, g, sold);
+      await i.reply({
+        content: [
+          `✅ Venta **#${String(sold.proofNumber).padStart(4, '0')}** registrada por <@${i.user.id}>.${product?.stock !== null && product ? ` Stock restante: **${product.stock}**.` : ''}`,
+          posted ? `🧾 Proof publicado en <#${getShopConfig(ctx, g.id).proofChannelId}>.` : '',
+          `<@${t.userId}>, ¡gracias por tu compra! Si querés, dejá tu reseña con el botón. ⭐`,
+        ].filter(Boolean).join('\n'),
+        components: [row(new ButtonBuilder().setCustomId(cid('sh', 'rev', '0', t.id)).setLabel('Dejar reseña').setEmoji('⭐').setStyle(ButtonStyle.Primary))],
+        allowedMentions: { users: [t.userId] },
+      });
       await logShop(app, g, new EmbedBuilder().setColor(ACCENT).setDescription(`✅ Venta del ticket **#${t.number}** (<@${t.userId}>)${product ? ` · ${clean(product.title)}` : ''} registrada por <@${i.user.id}>.`));
       return;
     }
@@ -353,11 +434,15 @@ export const shopHandler: Handler = async (app, i, id) => {
     }
     case 'tk':
       return update(i, ticketConfigPanel(app, g, i.user.id));
+    case 'tanon':
+      saveShopConfig(ctx, g.id, { proofHideBuyer: !getShopConfig(ctx, g.id).proofHideBuyer });
+      return update(i, ticketConfigPanel(app, g, i.user.id, '✅ Guardado. Vale para los proofs nuevos y los que se editen.'));
     case 'tcat':
     case 'trole':
-    case 'tlog': {
+    case 'tlog':
+    case 'tproof': {
       const v = values(i)[0] ?? null;
-      const key = id.act === 'tcat' ? 'categoryId' : id.act === 'trole' ? 'staffRoleId' : 'logChannelId';
+      const key = id.act === 'tcat' ? 'categoryId' : id.act === 'trole' ? 'staffRoleId' : id.act === 'tlog' ? 'logChannelId' : 'proofChannelId';
       if (key === 'staffRoleId' && v && (v === g.id || g.roles.cache.get(v)?.managed)) throw new GameError('Ese rol no sirve como rol del staff.');
       saveShopConfig(ctx, g.id, { [key]: v });
       return update(i, ticketConfigPanel(app, g, i.user.id, '✅ Guardado.'));

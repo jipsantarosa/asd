@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { GameError } from '../src/services/context';
 import {
+  proofStats, saveReview,
   closeTicket, createProduct, deleteProduct, getProduct, getShopConfig, listProducts, markSold, openTicketsOf, parseHexColor, parseStock,
   reserveTicket, saveShopConfig, setTicketChannel, SHOP_LIMITS, updateProductPrice, updateProductTexts,
 } from '../src/services/shop';
-import { productEmbed } from '../src/discord/commands/shop';
+import { productEmbed, proofEmbed } from '../src/discord/commands/shop';
+import type { Guild } from 'discord.js';
 import { G, U, U2, makeWorld } from './helpers';
 
 const expectGameError = (fn: () => unknown, re?: RegExp) => assert.throws(fn, (e: unknown) => e instanceof GameError && (!re || re.test(e.message)));
@@ -82,7 +84,56 @@ describe('tienda: tickets', () => {
   it('configuración de tickets', () => {
     const w = makeWorld();
     saveShopConfig(w.ctx, G, { categoryId: '300000000000000005', staffRoleId: '300000000000000006' });
-    assert.deepEqual(getShopConfig(w.ctx, G), { categoryId: '300000000000000005', staffRoleId: '300000000000000006', logChannelId: null });
+    assert.deepEqual(getShopConfig(w.ctx, G), { categoryId: '300000000000000005', staffRoleId: '300000000000000006', logChannelId: null, proofChannelId: null, proofHideBuyer: false });
     expectGameError(() => saveShopConfig(w.ctx, G, { logChannelId: 'nope' }), /inválido/);
+  });
+});
+
+describe('tienda: proofs y reseñas', () => {
+  const guild = { name: 'Mi tienda', iconURL: () => null } as unknown as Guild;
+  const STAFF = '200000000000000077';
+
+  it('cada venta tiene su número de proof y guarda una copia del producto', () => {
+    const w = makeWorld();
+    const p = createProduct(w.ctx, G);
+    updateProductTexts(w.ctx, G, p.id, texts);
+    updateProductPrice(w.ctx, G, p.id, { ars: '399.00', usd: '1.00', stock: '' });
+    const a = markSold(w.ctx, G, reserveTicket(w.ctx, G, U, p.id).ticket.id, STAFF).ticket;
+    const b = markSold(w.ctx, G, reserveTicket(w.ctx, G, U2, p.id).ticket.id, STAFF).ticket;
+    assert.deepEqual([a.proofNumber, b.proofNumber], [1, 2]);
+    assert.equal(a.proofProduct, 'Mi producto');
+    assert.equal(a.proofPrice, 'ARS$399.00 · $1.00 USD');
+    assert.equal(a.soldBy, STAFF);
+    // Si después se edita o se borra el producto, el proof conserva lo que se vendió.
+    deleteProduct(w.ctx, G, p.id);
+    const e = proofEmbed(guild, a, false).toJSON();
+    assert.equal(e.title, '✅ Venta #0001 confirmada');
+    assert.ok(e.fields!.some((f) => f.value === 'Mi producto'));
+    assert.ok(e.fields!.some((f) => f.value === `<@${U}>`));
+    assert.ok(proofEmbed(guild, a, true).toJSON().fields!.some((f) => f.value === 'Anónimo'), 'puede ocultar al comprador');
+  });
+
+  it('reseña: solo quien compró, después de la venta, una vez, de 1 a 5', () => {
+    const w = makeWorld();
+    const p = createProduct(w.ctx, G);
+    const t = reserveTicket(w.ctx, G, U, p.id).ticket;
+    expectGameError(() => saveReview(w.ctx, G, t.id, U, '5', ''), /después de la venta/);
+    markSold(w.ctx, G, t.id, STAFF);
+    expectGameError(() => saveReview(w.ctx, G, t.id, U2, '5', ''), /Solo quien compró/);
+    expectGameError(() => saveReview(w.ctx, G, t.id, U, '9', ''), /1 al 5/);
+    const r = saveReview(w.ctx, G, t.id, U, '4', 'Todo bien @everyone');
+    assert.equal(r.rating, 4);
+    assert.ok(!/@everyone/.test(r.review!), 'no deja menciones masivas');
+    expectGameError(() => saveReview(w.ctx, G, t.id, U, '5', ''), /Ya dejaste/);
+    assert.match(proofEmbed(guild, r, false).toJSON().fields!.at(-1)!.value, /⭐⭐⭐⭐☆/);
+    assert.deepEqual(proofStats(w.ctx, G), { sales: 1, reviews: 1, average: 4 });
+  });
+
+  it('canal de proofs y comprador oculto se guardan en la configuración', () => {
+    const w = makeWorld();
+    saveShopConfig(w.ctx, G, { proofChannelId: '300000000000000008', proofHideBuyer: true });
+    const c = getShopConfig(w.ctx, G);
+    assert.equal(c.proofChannelId, '300000000000000008');
+    assert.equal(c.proofHideBuyer, true);
   });
 });
