@@ -1,8 +1,8 @@
 // Mensajes automáticos en Discord, desde tu cuenta y sin tocar tus ventanas (lo usa auto-mensajes.bat).
 //
-//   - "xmine 2"        cada 5 minutos (la espera de Nekotina)
-//   - "xfish 2"        5 segundos después de cada xmine
-//   - "xpet explore 2" cada 45 minutos
+//   - "xmine 3"        cada 5 minutos (la espera de Nekotina)
+//   - "xfish 3"        5 segundos después de cada xmine
+//   - "xpet explore 1" cada 45 minutos
 //
 // Abre Discord en Microsoft Edge (con su propio perfil, aparte del tuyo) en el canal y
 // escribe ahí como si fuera el teclado. No usa token: la primera vez se abre una ventana
@@ -24,9 +24,9 @@ const CANAL = 'https://discord.com/channels/1536949928872378438/1543948984886763
 // texto: lo que se escribe. cadaMinutos: cada cuánto se repite.
 // primeraVez: a los cuántos segundos de arrancar se manda la primera vez.
 const MENSAJES = [
-  { texto: 'xmine 2', cadaMinutos: 5, primeraVez: 0 },
-  { texto: 'xfish 2', cadaMinutos: 5, primeraVez: 5 },
-  { texto: 'xpet explore 2', cadaMinutos: 45, primeraVez: 10 },
+  { texto: 'xmine 3', cadaMinutos: 5, primeraVez: 0 },
+  { texto: 'xfish 3', cadaMinutos: 5, primeraVez: 5 },
+  { texto: 'xpet explore 1', cadaMinutos: 45, primeraVez: 10 },
 ];
 
 // Nunca se mandan dos mensajes con menos de estos segundos de diferencia.
