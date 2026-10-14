@@ -9,6 +9,10 @@
 // para que inicies sesión; después queda guardada y Discord sigue abierto sin ventana,
 // así que no hace falta tener nada a la vista (ni la PC desbloqueada).
 //
+// Lee lo que contesta Nekotina: si pide esperar, espera justo hasta la hora que dice; si
+// dice que te falta algo (pico, caña...) o pide verificar que sos humano, te avisa con un
+// sonido y pausa.
+//
 // Para detenerlo, cerrá la ventana negra.
 
 import { chromium } from 'playwright-core';
@@ -23,6 +27,9 @@ const CANAL = 'https://discord.com/channels/1536949928872378438/1543948984886763
 
 // texto: lo que se escribe. cadaMinutos: cada cuánto se repite.
 // primeraVez: a los cuántos segundos de arrancar se manda la primera vez.
+// Si Nekotina contesta que esperes, el script espera justo hasta la hora que dice. Así que si
+// tenés un buff, podés bajar cadaMinutos al tiempo con buff: sin buff, Nekotina contesta
+// "Necesito descansar" una vez por vuelta y el script espera lo que falta.
 const MENSAJES = [
   { texto: 'xmine 3', cadaMinutos: 5, primeraVez: 0 },
   { texto: 'xfish 3', cadaMinutos: 5, primeraVez: 5 },
@@ -38,6 +45,13 @@ const REINTENTO = 30;
 // Segundos de más sobre cadaMinutos, para no llegar justo antes de que termine la espera del bot.
 const MARGEN = 10;
 
+// Bot que responde los comandos: el script lee sus respuestas.
+const BOT = 'Nekotina';
+
+// Si el bot dice que te falta algo para un comando (pico, caña...), ese comando se pausa estos
+// minutos. Si pide verificar que sos humano, se pausa todo.
+const PAUSA_PROBLEMA = 10;
+
 // Navegador: 'msedge' (viene con Windows) o 'chrome'.
 const NAVEGADOR = 'msedge';
 
@@ -48,11 +62,47 @@ const SIN_VENTANA = true;
 
 // Perfil de esa ventana (tiene tu sesión de Discord): fuera de esta carpeta, para no compartirlo sin querer.
 const PERFIL = path.join(process.env.LOCALAPPDATA || os.homedir(), 'auto-mensajes-discord');
-// La caja para escribir mensajes del canal.
+// La caja para escribir mensajes del canal, y cada mensaje del chat.
 const CAJA = '[role="textbox"][data-slate-editor="true"]';
+const MENSAJE = 'li[id^="chat-messages-"]';
+
+// Cómo se reconoce cada respuesta del bot.
+const ESPERA = /descans|cansad|podr[aá]s?|vuelve|volv[eé]|de nuevo|esper|cooldown/i;
+const PROBLEMA = /no (tienes|ten[eé]s)|necesit[aá]s|se (te )?rompi[oó]|est[aá] rot[oa]|no (puedes|pod[eé]s)/i;
+const VERIFICACION = /captcha|verific|humano|anti-?bot/i;
 
 const hora = (ms = Date.now()) => new Date(ms).toLocaleTimeString('es-AR', { hour12: false });
 const log = (texto) => console.log(`[${hora()}] ${texto}`);
+// Con sonido, para lo que tenés que ver vos.
+const alerta = (texto) => {
+  process.stdout.write('\x07');
+  log(`[!] ${texto}`);
+};
+
+// Cuándo se puede volver a usar el comando, según la respuesta del bot
+// ("Podrás regresar a las minas a las 10:24 (en 5 minutos)"). null si no dice.
+function cuandoVuelve(texto, ahora = new Date()) {
+  let cuando = null;
+  const hm = texto.match(/a las (\d{1,2}):(\d{2})\s*([ap])?/i);
+  if (hm) {
+    let h = Number(hm[1]);
+    if (hm[3]?.toLowerCase() === 'p' && h < 12) h += 12;
+    if (hm[3]?.toLowerCase() === 'a' && h === 12) h = 0;
+    // Hasta el final de ese minuto, porque la hora no trae segundos.
+    cuando = new Date(ahora);
+    cuando.setHours(h, Number(hm[2]), 59, 0);
+    if (cuando < ahora - 3600_000) cuando.setDate(cuando.getDate() + 1); // es después de la medianoche
+  }
+  const en = texto.match(/en (\d+|un|una|unos) (segundo|minuto|hora)s?/i);
+  if (en) {
+    const unidad = { segundo: 1000, minuto: 60_000, hora: 3600_000 }[en[2].toLowerCase()];
+    const palabra = en[1].toLowerCase();
+    const n = /^\d+$/.test(palabra) ? Number(palabra) : palabra === 'unos' ? (unidad === 1000 ? 30 : 2) : 1;
+    const relativo = new Date(ahora.getTime() + n * unidad);
+    if (!cuando || relativo > cuando) cuando = relativo;
+  }
+  return cuando;
+}
 
 // Mientras corre, Windows no se suspende (la pantalla sí se puede apagar o bloquear).
 function mantenerDespierta() {
@@ -169,9 +219,43 @@ async function esperarCanal() {
   }
 }
 
-// Devuelve true si el mensaje salió.
+// Espera la respuesta del bot que cita nuestro mensaje y devuelve su texto, o null si no contesta.
+async function leerRespuesta(page, texto, antes) {
+  const hasta = Date.now() + 15_000;
+  while (Date.now() < hasta) {
+    const respuesta = await page.$$eval(
+      MENSAJE,
+      (mensajes, { antes, bot, texto }) => {
+        for (const li of mensajes) {
+          if (antes.includes(li.id) || !li.innerText.includes(texto)) continue;
+          const autor = li.querySelector('[id^="message-username-"]')?.textContent ?? '';
+          if (!autor.includes(bot)) continue;
+          // Solo lo que dice el bot (el texto y los recuadros), sin la cita de nuestro mensaje.
+          const id = li.id.split('-').pop();
+          const partes = [`#message-content-${id}`, `#message-accessories-${id}`].map(
+            (sel) => li.querySelector(sel)?.innerText ?? '',
+          );
+          return partes.join('\n').trim() || li.innerText;
+        }
+        return null;
+      },
+      { antes, bot: BOT, texto },
+    );
+    if (respuesta) return respuesta;
+    await sleep(500);
+  }
+  return null;
+}
+
+// Manda el mensaje y lee qué contestó el bot. Devuelve:
+//   { estado: 'ok' }               salió y el bot contestó normal (o no contestó)
+//   { estado: 'espera', cuando }   el bot pidió esperar hasta `cuando`
+//   { estado: 'problema' }         el bot dijo que falta algo (pico, caña...)
+//   { estado: 'verificacion' }     el bot pide verificar que sos humano
+//   { estado: 'no-enviado' }       el mensaje no salió
 async function enviar(texto) {
   const page = await esperarCanal();
+  const antes = await page.$$eval(MENSAJE, (mensajes) => mensajes.map((li) => li.id));
   await page.locator(CAJA).first().focus();
   // Si quedó algo escrito en la caja, se reemplaza.
   await page.keyboard.press('Control+A');
@@ -186,12 +270,32 @@ async function enviar(texto) {
       { caja: CAJA, texto },
       { timeout: 5000, polling: 250 },
     );
-    log(`Enviado: ${texto}`);
-    return true;
   } catch {
     log(`No se envió "${texto}": sigue en la caja (¿modo lento o sin permiso?). Reintento en ${REINTENTO} s.`);
-    return false;
+    return { estado: 'no-enviado' };
   }
+
+  const respuesta = await leerRespuesta(page, texto, antes);
+  if (!respuesta) {
+    log(`Enviado: ${texto} (${BOT} no contestó)`);
+    return { estado: 'ok' };
+  }
+  const resumen = respuesta.replace(/\s+/g, ' ').slice(0, 160);
+  if (VERIFICACION.test(respuesta)) {
+    alerta(`${BOT} pide verificar que sos humano: "${resumen}". Resolvelo en Discord; pauso todo ${PAUSA_PROBLEMA} min.`);
+    return { estado: 'verificacion' };
+  }
+  const cuando = cuandoVuelve(respuesta);
+  if (cuando && ESPERA.test(respuesta)) {
+    log(`${BOT} pide esperar para "${texto}": vuelvo a probar a las ${hora(cuando.getTime() + MARGEN * 1000)}.`);
+    return { estado: 'espera', cuando };
+  }
+  if (PROBLEMA.test(respuesta)) {
+    alerta(`${BOT} dice que falta algo para "${texto}": "${resumen}". Pauso ese comando ${PAUSA_PROBLEMA} min.`);
+    return { estado: 'problema' };
+  }
+  log(`Enviado: ${texto}`);
+  return { estado: 'ok' };
 }
 
 async function main() {
@@ -219,9 +323,9 @@ async function main() {
     if (falta > 1) log(`Próximo: "${t.texto}" a las ${hora(Date.now() + falta * 1000)}`);
     if (falta > 0) await sleep(falta * 1000);
 
-    let enviado = false;
+    let r = { estado: 'no-enviado' };
     try {
-      enviado = await enviar(t.texto);
+      r = await enviar(t.texto);
     } catch (e) {
       if (!(e instanceof SinSesion)) {
         log(`Error al enviar "${t.texto}": ${e.message.split('\n')[0]}. Reintento en ${REINTENTO} s.`);
@@ -232,9 +336,20 @@ async function main() {
       }
     }
 
-    // Cada mensaje vuelve a tocar recién cuando pasa su tiempo completo desde que se mandó.
+    // Cada mensaje vuelve a tocar recién cuando pasa su tiempo completo desde que se mandó,
+    // o cuando el bot dijo que se puede.
     ultimoEnvio = ahora();
-    t.proximo = ultimoEnvio + (enviado ? t.cada + MARGEN : Math.min(REINTENTO, t.cada));
+    if (r.estado === 'ok') {
+      t.proximo = ultimoEnvio + t.cada + MARGEN;
+    } else if (r.estado === 'espera') {
+      t.proximo = ultimoEnvio + Math.max(REINTENTO, (r.cuando - Date.now()) / 1000 + MARGEN);
+    } else if (r.estado === 'problema') {
+      t.proximo = ultimoEnvio + PAUSA_PROBLEMA * 60;
+    } else if (r.estado === 'verificacion') {
+      for (const x of tareas) x.proximo = Math.max(x.proximo, ultimoEnvio + PAUSA_PROBLEMA * 60);
+    } else {
+      t.proximo = ultimoEnvio + Math.min(REINTENTO, t.cada);
+    }
   }
 }
 
